@@ -10,7 +10,7 @@ router.get('/', (req, res) => {
 });
 
 router.post('/accounts', authenticate, (req, res) => {
-  const { game_id, platform_username, platform, current_rank_index, peak_rank_index } = req.body;
+  const { game_id, platform_username, platform, current_rank_index, peak_rank_index, tracker_url } = req.body;
   if (!game_id || !platform_username) {
     return res.status(400).json({ error: 'game_id and platform_username are required' });
   }
@@ -24,10 +24,10 @@ router.post('/accounts', authenticate, (req, res) => {
 
   try {
     const stmt = db.prepare(`
-      INSERT INTO connected_accounts (user_id, game_id, platform_username, platform, current_rank_index, peak_rank_index)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO connected_accounts (user_id, game_id, platform_username, platform, current_rank_index, peak_rank_index, tracker_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-    const result = stmt.run(req.userId, game_id, platform_username, platform || 'PC', curIdx, peakIdx);
+    const result = stmt.run(req.userId, game_id, platform_username, platform || 'PC', curIdx, peakIdx, tracker_url || null);
     const newScore = updateUserGamerscore(req.userId);
 
     res.json({
@@ -54,7 +54,7 @@ router.patch('/accounts/:id', authenticate, (req, res) => {
   if (!account) return res.status(404).json({ error: 'Account not found' });
 
   const ranks = JSON.parse(account.ranks);
-  const { current_rank_index, peak_rank_index, platform_username, platform } = req.body;
+  const { current_rank_index, peak_rank_index, platform_username, platform, tracker_url } = req.body;
 
   let curIdx = current_rank_index !== undefined ? current_rank_index : account.current_rank_index;
   let peakIdx = peak_rank_index !== undefined ? peak_rank_index : account.peak_rank_index;
@@ -66,6 +66,7 @@ router.patch('/accounts/:id', authenticate, (req, res) => {
 
   if (platform_username) { updates.push('platform_username = ?'); values.push(platform_username); }
   if (platform) { updates.push('platform = ?'); values.push(platform); }
+  if (tracker_url !== undefined) { updates.push('tracker_url = ?'); values.push(tracker_url || null); }
 
   values.push(req.params.id, req.userId);
   db.prepare(`UPDATE connected_accounts SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`).run(...values);

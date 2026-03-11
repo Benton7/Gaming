@@ -12,7 +12,8 @@
 <nav class="navbar" id="navbar">
   <div class="nav-inner">
     <a class="nav-brand" href="#/dashboard">
-      <span class="brand-icon">🎮</span> GamerHub
+      <span class="brand-icon">⬡</span>
+      <span class="brand-text">GamerHub</span>
     </a>
     <div class="nav-links" id="navLinks">
       <a href="#/dashboard" class="nav-link" data-page="dashboard">Dashboard</a>
@@ -29,10 +30,10 @@
       <div class="user-menu" id="userMenu">
         <div class="user-menu-score">
           <span class="gs-label">Gamerscore</span>
-          <span class="gs-value" id="menuGamerscore">0</span>
+          <span class="gs-value mono" id="menuGamerscore">0</span>
         </div>
-        <a href="#/profile" class="user-menu-item">Profile</a>
-        <button class="user-menu-item danger" onclick="logout()">Sign Out</button>
+        <a href="#/profile" class="user-menu-item">⬡ Profile</a>
+        <button class="user-menu-item danger" onclick="logout()">⏻ Sign Out</button>
       </div>
     </div>
   </div>
@@ -46,9 +47,9 @@
     <div class="landing-bg"></div>
     <div class="landing-content">
       <div class="landing-hero">
-        <div class="hero-badge">Your Gaming Identity, United</div>
+        <div class="hero-badge">◈ Your Gaming Identity, United</div>
         <h1 class="hero-title">All Your Ranks.<br><span class="gradient-text">One Platform.</span></h1>
-        <p class="hero-subtitle">Connect accounts from Valorant, CS2, Rocket League and more. Track your current &amp; peak ranks, earn a Gamerscore, and compete in Clubs.</p>
+        <p class="hero-subtitle">Connect accounts from Valorant, CS2, Rocket League, Fortnite and more. Track your current &amp; peak ranks, link your tracker.gg profile, earn a Gamerscore, and compete in Clubs.</p>
         <div class="hero-actions">
           <button class="btn btn-primary btn-lg" onclick="showPage('register')">Get Started Free</button>
           <button class="btn btn-ghost btn-lg" onclick="showPage('login')">Sign In</button>
@@ -57,13 +58,14 @@
       <div class="hero-card-preview">
         <div class="preview-card">
           <div class="preview-gs">
-            <span class="preview-gs-label">GAMERSCORE</span>
+            <span class="preview-gs-label">◈ Gamerscore</span>
             <span class="preview-gs-value">12,480</span>
           </div>
           <div class="preview-games">
             <div class="preview-game"><span>🎯</span><span>Valorant</span><span class="preview-rank" style="color:#818cf8">Diamond 2</span></div>
             <div class="preview-game"><span>🚀</span><span>Rocket League</span><span class="preview-rank" style="color:#ef4444">Champion III</span></div>
             <div class="preview-game"><span>💣</span><span>CS2</span><span class="preview-rank" style="color:#818cf8">Legendary Eagle</span></div>
+            <div class="preview-game"><span>🏗️</span><span>Fortnite</span><span class="preview-rank" style="color:#fbbf24">Champion</span></div>
           </div>
         </div>
       </div>
@@ -72,24 +74,34 @@
       <h2 class="features-title">Everything in One Place</h2>
       <div class="features-grid">
         <div class="feature-card">
-          <div class="feature-icon">🏆</div>
+          <span class="feature-icon">🏆</span>
           <h3>Gamerscore</h3>
           <p>Your ranks across all games combine into a single score — your true measure as a gamer.</p>
         </div>
         <div class="feature-card">
-          <div class="feature-icon">📊</div>
+          <span class="feature-icon">📊</span>
           <h3>Peak Tracking</h3>
           <p>See both your current rank and all-time peak. Prove how high you've climbed.</p>
         </div>
         <div class="feature-card">
-          <div class="feature-icon">⚔️</div>
-          <h3>Club Wars</h3>
-          <p>Form clubs with friends and challenge rival clubs. Climb the club leaderboard.</p>
+          <span class="feature-icon">🔗</span>
+          <h3>Tracker.gg Link</h3>
+          <p>Link your tracker.gg profile to display a verified badge next to your stats.</p>
         </div>
         <div class="feature-card">
-          <div class="feature-icon">🌍</div>
+          <span class="feature-icon">⚔️</span>
+          <h3>Club Wars</h3>
+          <p>Form clubs, post open challenges, and compete against rivals for club points.</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🌍</span>
           <h3>Leaderboard</h3>
           <p>See where you rank globally and compete to reach the top.</p>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🎮</span>
+          <h3>10 Games</h3>
+          <p>Valorant, LoL, CS2, Apex, Rocket League, OW2, R6S, Fortnite, Dota 2, Warzone.</p>
         </div>
       </div>
     </div>
@@ -98,7 +110,7 @@
   <!-- LOGIN -->
   <section id="page-login" class="page page-auth">
     <div class="auth-card">
-      <div class="auth-logo">🎮 GamerHub</div>
+      <div class="auth-logo">⬡ GamerHub</div>
       <h2 class="auth-title">Welcome Back</h2>
       <p class="auth-sub">Sign in to your account</p>
       <div id="loginError" class="alert alert-error" style="display:none"></div>
@@ -120,7 +132,7 @@
   <!-- REGISTER -->
   <section id="page-register" class="page page-auth">
     <div class="auth-card">
-      <div class="auth-logo">🎮 GamerHub</div>
+      <div class="auth-logo">⬡ GamerHub</div>
       <h2 class="auth-title">Join GamerHub</h2>
       <p class="auth-sub">Create your gaming identity</p>
       <div id="registerError" class="alert alert-error" style="display:none"></div>
@@ -161,8 +173,8 @@
         <div class="gs-card" id="gamerscoreCard">
           <div class="gs-card-bg"></div>
           <div class="gs-card-content">
-            <div class="gs-card-label">GAMERSCORE</div>
-            <div class="gs-card-score" id="dashGamerscore">0</div>
+            <div class="gs-card-label">◈ Gamerscore</div>
+            <div class="gs-card-score mono" id="dashGamerscore">0</div>
             <div class="gs-card-sub" id="dashGamesConnected">0 games connected</div>
           </div>
           <div class="gs-card-rank" id="dashRankTitle"></div>
@@ -171,7 +183,7 @@
         <!-- Club card -->
         <div class="club-summary-card" id="clubSummaryCard">
           <div class="card-header">
-            <h3 class="card-title">My Club</h3>
+            <h3 class="card-title">◈ My Club</h3>
             <button class="btn btn-sm btn-ghost" onclick="showPage('clubs')">View</button>
           </div>
           <div id="clubSummaryContent"></div>
@@ -185,7 +197,7 @@
       </div>
       <div class="accounts-grid" id="dashAccounts">
         <div class="empty-state">
-          <div class="empty-icon">🎮</div>
+          <span class="empty-icon">🎮</span>
           <p>No games connected yet.</p>
           <button class="btn btn-primary" onclick="showPage('games')">Connect Your First Game</button>
         </div>
@@ -214,17 +226,29 @@
           <h1 class="page-title">Clubs</h1>
           <p class="page-subtitle">Compete with friends against rival clubs</p>
         </div>
-        <button class="btn btn-primary" onclick="openCreateClub()" id="createClubBtn">+ Create Club</button>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="showPage('open-challenges')" style="display:none" id="viewOpenChallengesBtn">⚡ Open Challenges</button>
+          <button class="btn btn-primary" onclick="openCreateClub()" id="createClubBtn">+ Create Club</button>
+        </div>
       </div>
 
       <!-- My Club -->
       <div id="myClubSection" style="display:none">
         <h2 class="section-title">My Club</h2>
         <div id="myClubCard"></div>
-        <h3 class="section-title" style="margin-top:2rem">Challenges</h3>
+        <div style="display:flex;gap:0.75rem;align-items:center;margin-top:1.5rem;flex-wrap:wrap">
+          <h3 class="section-title">Challenges</h3>
+          <button class="btn btn-ghost btn-sm" onclick="openChallengeModal()">⚔️ Issue Challenge</button>
+          <button class="btn btn-cyan btn-sm" onclick="openOpenChallengeModal()">⚡ Post Open Challenge</button>
+        </div>
         <div id="myClubChallenges"></div>
-        <button class="btn btn-outline btn-sm" style="margin-top:1rem" onclick="openChallengeModal()">⚔️ Issue Challenge</button>
       </div>
+
+      <!-- Open Challenges (public) -->
+      <div class="section-header" style="margin-top:2rem">
+        <h2 class="section-title">⚡ Open Challenges</h2>
+      </div>
+      <div id="openChallengesList"></div>
 
       <div class="section-header" style="margin-top:2rem">
         <h2 class="section-title">All Clubs</h2>
@@ -259,18 +283,22 @@
       <h1 class="page-title">Profile</h1>
       <div class="profile-grid">
         <div class="profile-card">
-          <div class="profile-avatar-wrap">
-            <div class="avatar-lg" id="profileAvatar"></div>
-          </div>
-          <h2 class="profile-name" id="profileGamertag"></h2>
-          <p class="profile-username" id="profileUsername"></p>
-          <div class="profile-score-badge">
-            <span>Gamerscore</span>
-            <strong id="profileGamerscore">0</strong>
+          <div class="profile-banner" id="profileBanner"></div>
+          <div class="profile-card-content">
+            <div class="profile-avatar-wrap">
+              <div class="avatar-lg" id="profileAvatar"></div>
+            </div>
+            <h2 class="profile-name" id="profileGamertag"></h2>
+            <p class="profile-username" id="profileUsername"></p>
+            <p class="profile-bio" id="profileBio"></p>
+            <div class="profile-score-badge">
+              <span>Gamerscore</span>
+              <strong class="mono" id="profileGamerscore">0</strong>
+            </div>
           </div>
         </div>
         <div class="profile-edit-card">
-          <h3 class="card-title">Edit Profile</h3>
+          <h3 class="card-title" style="margin-bottom:1.25rem">Edit Profile</h3>
           <div id="profileEditError" class="alert alert-error" style="display:none"></div>
           <div id="profileEditSuccess" class="alert alert-success" style="display:none"></div>
           <div class="form-group">
@@ -278,8 +306,16 @@
             <input type="text" class="form-input" id="editGamertag" placeholder="Display name" />
           </div>
           <div class="form-group">
+            <label class="form-label">Bio</label>
+            <textarea class="form-input" id="editBio" placeholder="A short bio about yourself..." rows="2"></textarea>
+          </div>
+          <div class="form-group">
             <label class="form-label">Avatar Color</label>
             <div class="color-swatches" id="colorSwatches"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Profile Banner Color</label>
+            <div class="color-swatches" id="bannerSwatches"></div>
           </div>
           <button class="btn btn-primary" onclick="saveProfile()">Save Changes</button>
         </div>
@@ -322,6 +358,10 @@
         <label class="form-label">Peak Rank (All-Time Best)</label>
         <select class="form-input" id="connectPeakRank"></select>
       </div>
+      <div class="form-group">
+        <label class="form-label">Tracker.gg Profile URL <span style="color:var(--text-3);font-weight:400;text-transform:none">(optional — shows a Linked badge)</span></label>
+        <input type="url" class="form-input" id="connectTrackerUrl" placeholder="https://tracker.gg/valorant/profile/..." />
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeAllModals()">Cancel</button>
@@ -344,6 +384,10 @@
       <div class="form-group">
         <label class="form-label">Peak Rank</label>
         <select class="form-input" id="updatePeakRank"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tracker.gg Profile URL <span style="color:var(--text-3);font-weight:400;text-transform:none">(optional)</span></label>
+        <input type="url" class="form-input" id="updateTrackerUrl" placeholder="https://tracker.gg/..." />
       </div>
     </div>
     <div class="modal-footer">
@@ -372,12 +416,54 @@
       </div>
       <div class="form-group">
         <label class="form-label">Description (optional)</label>
-        <textarea class="form-input" id="clubDesc" placeholder="Tell us about your club..." rows="3"></textarea>
+        <textarea class="form-input" id="clubDesc" placeholder="Tell us about your club..." rows="2"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Motto (optional)</label>
+        <input type="text" class="form-input" id="clubMotto" placeholder="Win or learn, never lose." />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Club Color</label>
+        <div class="color-swatches" id="clubColorSwatches"></div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeAllModals()">Cancel</button>
       <button class="btn btn-primary" onclick="submitCreateClub()">Create Club</button>
+    </div>
+  </div>
+
+  <!-- Edit Club Modal -->
+  <div class="modal" id="editClubModal">
+    <div class="modal-header">
+      <h3 class="modal-title">Edit Club</h3>
+      <button class="modal-close" onclick="closeAllModals()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="editClubError" class="alert alert-error" style="display:none"></div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea class="form-input" id="editClubDesc" rows="2"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Motto</label>
+        <input type="text" class="form-input" id="editClubMotto" placeholder="Your club motto..." />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Club Color</label>
+        <div class="color-swatches" id="editClubColorSwatches"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Recruiting</label>
+        <select class="form-input" id="editClubRecruit">
+          <option value="1">Open — Anyone can join</option>
+          <option value="0">Closed — Not accepting members</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeAllModals()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitEditClub()">Save Changes</button>
     </div>
   </div>
 
@@ -389,7 +475,7 @@
     </div>
     <div class="modal-body">
       <div id="challengeError" class="alert alert-error" style="display:none"></div>
-      <p class="form-label" style="margin-bottom:1rem">Challenge a club to compete. The club with the higher average Gamerscore wins.</p>
+      <p style="font-size:0.85rem;color:var(--text-2);margin-bottom:1rem">Challenge a club to compete. The club with the higher average Gamerscore wins.</p>
       <div class="form-group">
         <label class="form-label">Select Club to Challenge</label>
         <select class="form-input" id="challengeTargetSelect"></select>
@@ -398,6 +484,54 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeAllModals()">Cancel</button>
       <button class="btn btn-danger" onclick="submitChallenge()">⚔️ Send Challenge</button>
+    </div>
+  </div>
+
+  <!-- Open Challenge Modal -->
+  <div class="modal" id="openChallengeModal">
+    <div class="modal-header">
+      <h3 class="modal-title">⚡ Post Open Challenge</h3>
+      <button class="modal-close" onclick="closeAllModals()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="openChallengeError" class="alert alert-error" style="display:none"></div>
+      <p style="font-size:0.85rem;color:var(--text-2);margin-bottom:1.25rem">Post an open challenge that any club can accept. Choose your participating members and the games being played.</p>
+      <div class="form-group">
+        <label class="form-label">Description (optional)</label>
+        <input type="text" class="form-input" id="openChallengeDesc" placeholder="Best of 3 rounds, no subs..." />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Participating Members <span style="color:var(--text-3);font-weight:400;text-transform:none">(select who's competing)</span></label>
+        <div class="member-checklist" id="openChallengeMembers"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Games Being Played <span style="color:var(--text-3);font-weight:400;text-transform:none">(select one or more)</span></label>
+        <div class="game-checklist" id="openChallengeGames"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeAllModals()">Cancel</button>
+      <button class="btn btn-cyan" onclick="submitOpenChallenge()">⚡ Post Challenge</button>
+    </div>
+  </div>
+
+  <!-- Accept Open Challenge Modal -->
+  <div class="modal" id="acceptOpenChallengeModal">
+    <div class="modal-header">
+      <h3 class="modal-title">⚡ Accept Challenge</h3>
+      <button class="modal-close" onclick="closeAllModals()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="acceptOpenChallengeError" class="alert alert-error" style="display:none"></div>
+      <div id="acceptChallengeInfo" style="margin-bottom:1.25rem;padding:0.75rem;background:var(--bg-3);border-radius:var(--radius-sm);border:1px solid var(--border)"></div>
+      <div class="form-group">
+        <label class="form-label">Your Participating Members</label>
+        <div class="member-checklist" id="acceptOpenChallengeMembers"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeAllModals()">Cancel</button>
+      <button class="btn btn-success" onclick="submitAcceptOpenChallenge()">⚡ Accept & Compete</button>
     </div>
   </div>
 

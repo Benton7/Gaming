@@ -6,7 +6,7 @@ const router = express.Router();
 
 router.get('/me', authenticate, (req, res) => {
   const user = db.prepare(
-    'SELECT id, username, email, gamertag, avatar_color, gamerscore, created_at FROM users WHERE id = ?'
+    'SELECT id, username, email, gamertag, avatar_color, banner_color, bio, gamerscore, created_at FROM users WHERE id = ?'
   ).get(req.userId);
 
   if (!user) return res.status(404).json({ error: 'User not found' });
@@ -35,12 +35,13 @@ router.get('/me', authenticate, (req, res) => {
       current_rank_index: a.current_rank_index,
       peak_rank_index: a.peak_rank_index,
       last_updated: a.last_updated,
+      tracker_url: a.tracker_url || null,
       ranks
     };
   });
 
   const membership = db.prepare(`
-    SELECT cm.role, c.id, c.name, c.tag, c.club_score, c.wins, c.losses
+    SELECT cm.role, c.id, c.name, c.tag, c.club_score, c.wins, c.losses, c.club_color, c.motto
     FROM club_members cm
     JOIN clubs c ON cm.club_id = c.id
     WHERE cm.user_id = ?
@@ -50,12 +51,14 @@ router.get('/me', authenticate, (req, res) => {
 });
 
 router.patch('/me', authenticate, (req, res) => {
-  const { gamertag, avatar_color } = req.body;
+  const { gamertag, avatar_color, banner_color, bio } = req.body;
   const updates = [];
   const values = [];
 
   if (gamertag !== undefined) { updates.push('gamertag = ?'); values.push(gamertag); }
   if (avatar_color !== undefined) { updates.push('avatar_color = ?'); values.push(avatar_color); }
+  if (banner_color !== undefined) { updates.push('banner_color = ?'); values.push(banner_color); }
+  if (bio !== undefined) { updates.push('bio = ?'); values.push(bio); }
 
   if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update' });
 
@@ -79,7 +82,7 @@ router.get('/leaderboard', (req, res) => {
 
 router.get('/:id', (req, res) => {
   const user = db.prepare(
-    'SELECT id, username, gamertag, avatar_color, gamerscore, created_at FROM users WHERE id = ?'
+    'SELECT id, username, gamertag, avatar_color, banner_color, bio, gamerscore, created_at FROM users WHERE id = ?'
   ).get(req.params.id);
 
   if (!user) return res.status(404).json({ error: 'User not found' });
@@ -103,7 +106,8 @@ router.get('/:id', (req, res) => {
       platform_username: a.platform_username,
       platform: a.platform,
       current_rank: ranks[a.current_rank_index] || null,
-      peak_rank: ranks[a.peak_rank_index] || null
+      peak_rank: ranks[a.peak_rank_index] || null,
+      tracker_url: a.tracker_url || null
     };
   });
 
