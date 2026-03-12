@@ -13,6 +13,8 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/games', require('./routes/games'));
 app.use('/api/clubs', require('./routes/clubs'));
+app.use('/api/matches', require('./routes/matches'));
+app.use('/api/teams', require('./routes/teams'));
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

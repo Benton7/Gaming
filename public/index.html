@@ -19,6 +19,7 @@
       <a href="#/dashboard" class="nav-link" data-page="dashboard">Dashboard</a>
       <a href="#/games" class="nav-link" data-page="games">Games</a>
       <a href="#/clubs" class="nav-link" data-page="clubs">Clubs</a>
+      <a href="#/teams" class="nav-link" data-page="teams">Teams</a>
       <a href="#/leaderboard" class="nav-link" data-page="leaderboard">Leaderboard</a>
     </div>
     <div class="nav-user" id="navUser">
@@ -257,6 +258,57 @@
         </div>
       </div>
       <div id="clubsGrid" class="clubs-grid"></div>
+    </div>
+  </section>
+
+  <!-- MATCH PAGE -->
+  <section id="page-match" class="page page-app">
+    <div class="container" style="max-width:1100px">
+      <div id="matchPageContent"></div>
+    </div>
+  </section>
+
+  <!-- TEAMS PAGE -->
+  <section id="page-teams" class="page page-app">
+    <div class="container">
+      <div class="dashboard-header">
+        <div>
+          <h1 class="page-title">Teams</h1>
+          <p class="page-subtitle">Game-specific competitive rosters</p>
+        </div>
+        <button class="btn btn-primary" onclick="openCreateTeamModal()">+ Create Team</button>
+      </div>
+
+      <!-- My Teams -->
+      <div id="myTeamsSection">
+        <h2 class="section-title" style="margin-bottom:1rem">My Teams</h2>
+        <div id="myTeamsList"></div>
+        <!-- Team invites -->
+        <div id="teamInvitesSection" style="display:none;margin-top:1.5rem">
+          <h3 class="section-title" style="font-size:0.85rem;margin-bottom:0.75rem">Pending Invites</h3>
+          <div id="teamInvitesList"></div>
+        </div>
+      </div>
+
+      <div class="section-header" style="margin-top:2rem">
+        <h2 class="section-title">Find Teams</h2>
+        <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+          <select class="form-input" id="teamFilterGame" style="max-width:180px" onchange="loadAllTeams()">
+            <option value="">All Games</option>
+          </select>
+          <input type="text" class="form-input search-input" id="teamSearch" placeholder="Search teams..." oninput="debounceLoadTeams()" />
+        </div>
+      </div>
+      <div id="allTeamsGrid" class="clubs-grid" style="margin-top:1rem"></div>
+
+      <!-- Open Team Challenges -->
+      <div class="section-header" style="margin-top:2rem">
+        <h2 class="section-title">⚡ Open Team Challenges</h2>
+        <select class="form-input" id="teamChallengeFilterGame" style="max-width:180px" onchange="loadOpenTeamChallenges()">
+          <option value="">All Games</option>
+        </select>
+      </div>
+      <div id="openTeamChallengesList"></div>
     </div>
   </section>
 
@@ -512,6 +564,117 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeAllModals()">Cancel</button>
       <button class="btn btn-cyan" onclick="submitOpenChallenge()">⚡ Post Challenge</button>
+    </div>
+  </div>
+
+  <!-- Create Team Modal -->
+  <div class="modal" id="createTeamModal">
+    <div class="modal-header">
+      <h3 class="modal-title">Create a Team</h3>
+      <button class="modal-close" onclick="closeAllModals()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="createTeamError" class="alert alert-error" style="display:none"></div>
+      <div class="form-group">
+        <label class="form-label">Team Name</label>
+        <input type="text" class="form-input" id="teamName" placeholder="e.g. Storm Troopers" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tag (max 5 chars)</label>
+        <input type="text" class="form-input" id="teamTag" placeholder="STRM" maxlength="5" style="text-transform:uppercase" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Game</label>
+        <select class="form-input" id="teamGameSelect"></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeAllModals()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitCreateTeam()">Create Team</button>
+    </div>
+  </div>
+
+  <!-- Team Detail Modal -->
+  <div class="modal" id="teamDetailModal" style="max-width:640px">
+    <div class="modal-header">
+      <h3 class="modal-title" id="teamDetailTitle">Team</h3>
+      <button class="modal-close" onclick="closeAllModals()">✕</button>
+    </div>
+    <div class="modal-body" id="teamDetailBody"></div>
+    <div class="modal-footer" id="teamDetailFooter"></div>
+  </div>
+
+  <!-- Team Invite Modal -->
+  <div class="modal" id="teamInviteModal">
+    <div class="modal-header">
+      <h3 class="modal-title">Invite Player</h3>
+      <button class="modal-close" onclick="closeAllModals()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="teamInviteError" class="alert alert-error" style="display:none"></div>
+      <div class="form-group">
+        <label class="form-label">Player Username</label>
+        <input type="text" class="form-input" id="inviteUsername" placeholder="Enter exact username" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Role</label>
+        <select class="form-input" id="inviteRole">
+          <option value="player">Player (Starter)</option>
+          <option value="bench">Bench</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeAllModals()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitInvitePlayer()">Send Invite</button>
+    </div>
+  </div>
+
+  <!-- Post Team Challenge Modal -->
+  <div class="modal" id="postTeamChallengeModal">
+    <div class="modal-header">
+      <h3 class="modal-title">⚡ Post Team Challenge</h3>
+      <button class="modal-close" onclick="closeAllModals()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="postTeamChallengeError" class="alert alert-error" style="display:none"></div>
+      <p style="font-size:0.85rem;color:var(--text-2);margin-bottom:1rem">Post an open challenge that any team of the same game can accept.</p>
+      <div class="form-group">
+        <label class="form-label">Description (optional)</label>
+        <input type="text" class="form-input" id="teamChallengeDesc" placeholder="Bo3, best effort..." />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Participating Players</label>
+        <div class="member-checklist" id="teamChallengeParticipants"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeAllModals()">Cancel</button>
+      <button class="btn btn-cyan" onclick="submitPostTeamChallenge()">⚡ Post Challenge</button>
+    </div>
+  </div>
+
+  <!-- Accept Team Challenge Modal -->
+  <div class="modal" id="acceptTeamChallengeModal">
+    <div class="modal-header">
+      <h3 class="modal-title">⚡ Accept Team Challenge</h3>
+      <button class="modal-close" onclick="closeAllModals()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="acceptTeamChallengeError" class="alert alert-error" style="display:none"></div>
+      <div id="acceptTeamChallengeInfo" style="margin-bottom:1rem;padding:0.75rem;background:var(--bg-3);border-radius:var(--radius-sm);border:1px solid var(--border)"></div>
+      <div class="form-group">
+        <label class="form-label">Select Your Team</label>
+        <select class="form-input" id="acceptTeamSelect"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Your Participating Players</label>
+        <div class="member-checklist" id="acceptTeamParticipants"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeAllModals()">Cancel</button>
+      <button class="btn btn-success" onclick="submitAcceptTeamChallenge()">⚡ Accept & Play</button>
     </div>
   </div>
 
