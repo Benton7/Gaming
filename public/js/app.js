@@ -1151,7 +1151,7 @@ function buildAvatarHtml(user, size = 'sm') {
 }
 
 // ===== CONNECT GAME MODAL =====
-function openConnectGame(gameId, gameName, ranks) {
+function openConnectGame(gameId, gameSlug, gameName, ranks) {
   connectingGameId = gameId;
   document.getElementById('connectGameTitle').textContent = `Connect ${gameName}`;
   hideError('connectGameError');
