@@ -8,46 +8,37 @@ const router = express.Router();
 
 const RIOT_API_KEY = process.env.RIOT_API_KEY || '';
 const CLASH_ROYALE_API_KEY = process.env.CLASH_ROYALE_API_KEY || '';
+const TRACKER_GG_API_KEY = process.env.TRACKER_GG_API_KEY || '';
 
-// ─── API CONFIGURATION ────────────────────────────────────────────────────────
+// ─── TRACKER.GG GAME CONFIG ───────────────────────────────────────────────────
+// trnSlug: the game slug used by tracker.gg API
+// segType: 'overview' or 'playlist' — which segment type has rank data
+// segAttr: for playlist segments, match these attributes
+// rankStat: the stats key that holds current rank info
+// peakStat: the stats key that holds peak rank info (null if none)
+// divStat: a secondary stat to combine with rankStat (e.g., Rocket League tier+division)
+const TRACKER_GG_GAMES = {
+  'fortnite':         { trnSlug: 'fortnite',      segType: 'playlist', segAttr: { playlist: 'ranked-br' }, rankStat: 'rank',       peakStat: null,        divStat: null },
+  'valorant':         { trnSlug: 'valorant',       segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: 'peakRank',  divStat: null },
+  'r6s':              { trnSlug: 'r6s',            segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: 'maxRank',   divStat: null },
+  'marvel-rivals':    { trnSlug: 'marvel-rivals',  segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: null,        divStat: null },
+  'apex-legends':     { trnSlug: 'apex',           segType: 'overview', segAttr: {},                        rankStat: 'rankScore',  peakStat: null,        divStat: null },
+  'rocket-league':    { trnSlug: 'rocket-league',  segType: 'playlist', segAttr: { playlist: 'ranked-standard' }, rankStat: 'tier', peakStat: null,        divStat: 'division' },
+  'lol':              { trnSlug: 'lol',            segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: null,        divStat: null },
+  'cs2':              { trnSlug: 'csgo',           segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: null,        divStat: null },
+  'halo-infinite':    { trnSlug: 'halo-infinite',  segType: 'playlist', segAttr: null,                      rankStat: 'csr',        peakStat: null,        divStat: null },
+  'overwatch-2':      { trnSlug: 'overwatch-2',    segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: null,        divStat: null },
+  'cod-bo6':          { trnSlug: 'cod',            segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: null,        divStat: null },
+  'pubg':             { trnSlug: 'pubg',           segType: 'overview', segAttr: {},                        rankStat: 'rankPoints', peakStat: null,        divStat: null },
+  'destiny-2':        { trnSlug: 'destiny-2',      segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: null,        divStat: null },
+  'smite-2':          { trnSlug: 'smite-2',        segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: null,        divStat: null },
+  'splitgate-2':      { trnSlug: 'splitgate-2',    segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: null,        divStat: null },
+  'battlefield-2042': { trnSlug: 'bf2042',         segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: null,        divStat: null },
+  'roblox':           { trnSlug: 'roblox',         segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: null,        divStat: null },
+};
+
+// ─── LEGACY API CONFIGURATION (non-tracker.gg games) ─────────────────────────
 const GAME_API_CONFIG = {
-  valorant: {
-    label: 'Riot ID',
-    placeholder: 'PlayerName#NA1',
-    help: 'Enter your full Riot ID (Name#Tag). Region is auto-detected.',
-    method: 'henrik',
-    requiresKey: false,
-    showRegion: false,
-  },
-  lol: {
-    label: 'Riot ID',
-    placeholder: 'PlayerName#NA1',
-    help: 'Enter your Riot ID. Select your server region.',
-    method: 'riot_lol',
-    requiresKey: true,
-    showRegion: true,
-    regions: [
-      { value: 'na1', label: 'NA' }, { value: 'euw1', label: 'EUW' },
-      { value: 'eun1', label: 'EUNE' }, { value: 'kr', label: 'KR' },
-      { value: 'br1', label: 'BR' }, { value: 'la1', label: 'LAN' },
-      { value: 'la2', label: 'LAS' }, { value: 'oc1', label: 'OCE' },
-      { value: 'tr1', label: 'TR' }, { value: 'ru', label: 'RU' },
-    ],
-  },
-  tft: {
-    label: 'Riot ID',
-    placeholder: 'PlayerName#NA1',
-    help: 'Enter your Riot ID. Select your server region.',
-    method: 'riot_tft',
-    requiresKey: true,
-    showRegion: true,
-    regions: [
-      { value: 'na1', label: 'NA' }, { value: 'euw1', label: 'EUW' },
-      { value: 'eun1', label: 'EUNE' }, { value: 'kr', label: 'KR' },
-      { value: 'br1', label: 'BR' }, { value: 'la1', label: 'LAN' },
-      { value: 'la2', label: 'LAS' }, { value: 'oc1', label: 'OCE' },
-    ],
-  },
   dota2: {
     label: 'Steam Account ID or Profile URL',
     placeholder: '123456789 or steamcommunity.com/id/...',
@@ -103,6 +94,30 @@ function fetchJson(url, headers = {}) {
 
 // ─── RANK MAPPING HELPERS ─────────────────────────────────────────────────────
 
+// Normalize rank name for comparison: lowercase, roman numerals → numbers, strip "Division"
+function normalizeRankName(name) {
+  if (!name) return '';
+  return name.toLowerCase()
+    .replace(/\bdivision\s*/gi, '')
+    .replace(/\bvii\b/g, '7').replace(/\bvi\b/g, '6').replace(/\biv\b/g, '4')
+    .replace(/\biii\b/g, '3').replace(/\bii\b/g, '2')
+    .replace(/\bv\b/g, '5').replace(/\bi\b/g, '1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Find the best-matching rank index by name
+function findRankIndex(ranks, rankName) {
+  if (!rankName || !ranks.length) return 0;
+  const norm = normalizeRankName(rankName);
+  // Exact match
+  let idx = ranks.findIndex(r => normalizeRankName(r.name) === norm);
+  if (idx >= 0) return idx;
+  // Starts-with match
+  idx = ranks.findIndex(r => norm.startsWith(normalizeRankName(r.name)) || normalizeRankName(r.name).startsWith(norm));
+  return idx >= 0 ? idx : 0;
+}
+
 // Riot region → routing cluster for account-v1
 function riotCluster(region) {
   const map = {
@@ -133,7 +148,7 @@ function lolRankIndex(tier, rank) {
 function tftRankIndex(tier, rank) {
   const tierBase = {
     IRON: 0, BRONZE: 4, SILVER: 8, GOLD: 12, PLATINUM: 16,
-    DIAMOND: 20, // TFT skips Emerald
+    DIAMOND: 20,
   };
   const divOffset = { IV: 0, III: 1, II: 2, I: 3 };
   if (tier === 'MASTER') return 24;
@@ -142,13 +157,6 @@ function tftRankIndex(tier, rank) {
   const base = tierBase[tier];
   if (base === undefined) return 0;
   return base + (divOffset[rank] ?? 0);
-}
-
-// Henrik tier number → our Valorant rank index (tier 3=Iron1…27=Radiant)
-function valorantRankIndex(tier) {
-  if (!tier || tier < 3) return 0;
-  if (tier > 27) return 24; // Radiant
-  return tier - 3;
 }
 
 // OpenDota rank_tier → our Dota 2 rank index
@@ -219,167 +227,119 @@ function clashRoyaleIndex(trophies) {
   return 19;
 }
 
-// ─── CORE LOOKUP FUNCTION ─────────────────────────────────────────────────────
+// ─── TRACKER.GG LOOKUP ────────────────────────────────────────────────────────
+async function lookupTrackerGG(slug, trnUrl) {
+  if (!TRACKER_GG_API_KEY) throw new Error('Tracker.gg API key not configured on this server');
+
+  const cfg = TRACKER_GG_GAMES[slug];
+  if (!cfg) throw new Error('This game is not configured for tracker.gg lookup');
+
+  // Parse tracker.gg URL: https://tracker.gg/{game}/profile/{platform}/{username}/...
+  const match = trnUrl.match(/tracker\.gg\/[^/]+\/profile\/([^/]+)\/([^/?#]+)/);
+  if (!match) {
+    throw new Error('Invalid tracker.gg URL. Expected format: https://tracker.gg/{game}/profile/{platform}/{username}');
+  }
+
+  const platform = match[1];
+  const username = decodeURIComponent(match[2]);
+
+  const apiUrl = `https://public-api.tracker.gg/v2/${cfg.trnSlug}/standard/profile/${platform}/${encodeURIComponent(username)}`;
+  const res = await fetchJson(apiUrl, {
+    'TRN-Api-Key': TRACKER_GG_API_KEY,
+    'Accept': 'application/json',
+  });
+
+  if (res.status === 404) throw new Error('Profile not found on tracker.gg');
+  if (res.status === 403) throw new Error('Tracker.gg API key invalid or unauthorized');
+  if (res.status === 429) throw new Error('Rate limited by tracker.gg — please try again in a moment');
+  if (res.status !== 200) throw new Error(`Tracker.gg API error (${res.status})`);
+
+  const data = res.body?.data;
+  if (!data) throw new Error('No data returned from tracker.gg');
+
+  const displayName = data.platformInfo?.platformUserHandle || username;
+  const segments = data.segments || [];
+
+  // Find the right segment
+  let segment = null;
+  if (cfg.segType === 'overview') {
+    segment = segments.find(s => s.type === 'overview');
+  } else if (cfg.segType === 'playlist') {
+    if (cfg.segAttr && Object.keys(cfg.segAttr).length > 0) {
+      segment = segments.find(s =>
+        s.type === 'playlist' &&
+        Object.entries(cfg.segAttr).every(([k, v]) => s.attributes?.[k] === v)
+      );
+    }
+    // Fall back to first playlist, then first overview
+    if (!segment) segment = segments.find(s => s.type === 'playlist');
+    if (!segment) segment = segments.find(s => s.type === 'overview');
+  }
+
+  // Fall back to very first segment
+  if (!segment) segment = segments[0];
+
+  const stats = segment?.stats || {};
+
+  // Extract rank display name
+  let currentRankName = null;
+  let peakRankName = null;
+
+  const rankStat = stats[cfg.rankStat];
+  if (rankStat) {
+    if (cfg.divStat && stats[cfg.divStat]) {
+      // Rocket League: combine tier name + division (e.g., "Diamond" + "Division I" → "Diamond I")
+      const tierName = rankStat.metadata?.tierName || rankStat.displayValue || '';
+      const divRaw = stats[cfg.divStat].displayValue || '';
+      const divShort = divRaw.replace(/^Division\s*/i, '').trim();
+      currentRankName = divShort ? `${tierName} ${divShort}` : tierName;
+    } else if (rankStat.metadata?.rankName && rankStat.metadata?.divisionName) {
+      // e.g., Apex: rankName="Gold", divisionName="IV"
+      currentRankName = `${rankStat.metadata.rankName} ${rankStat.metadata.divisionName}`;
+    } else if (rankStat.displayValue) {
+      currentRankName = rankStat.displayValue;
+    } else if (rankStat.metadata?.tierName) {
+      currentRankName = rankStat.metadata.tierName;
+    }
+  }
+
+  // Try fallback stat keys if primary didn't work
+  if (!currentRankName) {
+    for (const key of ['rank', 'rankScore', 'tier', 'rating', 'grade', 'level']) {
+      const s = stats[key];
+      if (s?.displayValue && s.displayValue !== 'N/A' && s.displayValue !== '--') {
+        currentRankName = s.displayValue;
+        break;
+      }
+    }
+  }
+
+  // Peak rank
+  if (cfg.peakStat && stats[cfg.peakStat]) {
+    const peakStat = stats[cfg.peakStat];
+    if (peakStat.displayValue) peakRankName = peakStat.displayValue;
+    else if (peakStat.metadata?.rankName) peakRankName = peakStat.metadata.rankName;
+  }
+
+  return { username: displayName, currentRankName, peakRankName, platform };
+}
+
+// ─── LEGACY LOOKUP FUNCTION ───────────────────────────────────────────────────
 async function lookupRank(slug, identifier, region) {
   const cfg = GAME_API_CONFIG[slug];
   if (!cfg) throw new Error('No API support for this game');
 
   switch (cfg.method) {
-    // ── VALORANT (Henrik API) ─────────────────────────────────────────────────
-    case 'henrik': {
-      if (!identifier.includes('#')) throw new Error('Valorant requires Riot ID in format Name#Tag');
-      const [name, tag] = identifier.split('#');
-      // Try all major regions
-      const regions = region ? [region] : ['na', 'eu', 'ap', 'latam', 'br', 'kr'];
-      let lastErr = null;
-      for (const r of regions) {
-        const url = `https://api.henrikdev.xyz/valorant/v2/mmr/${r}/${encodeURIComponent(name)}/${encodeURIComponent(tag)}`;
-        const headers = {};
-        if (process.env.HENRIK_API_KEY) headers['Authorization'] = process.env.HENRIK_API_KEY;
-        try {
-          const res = await fetchJson(url, headers);
-          if (res.status === 200 && res.body?.data) {
-            const d = res.body.data;
-            const currentTier = d.current_data?.currenttier ?? 0;
-            const peakTier = d.highest_rank?.tier ?? currentTier;
-            return {
-              username: `${d.name}#${d.tag}`,
-              current_rank_index: valorantRankIndex(currentTier),
-              peak_rank_index: valorantRankIndex(Math.max(currentTier, peakTier)),
-              region: r,
-            };
-          }
-          if (res.status === 404) { lastErr = new Error('Riot ID not found'); continue; }
-          if (res.status === 429) throw new Error('Rate limited — please try again in a moment');
-          lastErr = new Error(`API error (${res.status})`);
-        } catch (e) { lastErr = e; }
-      }
-      throw lastErr || new Error('Could not find that Riot ID in any region');
-    }
-
-    // ── LEAGUE OF LEGENDS (Riot API) ──────────────────────────────────────────
-    case 'riot_lol': {
-      if (!RIOT_API_KEY) throw new Error('Riot API not configured on this server');
-      const riotRegion = region || 'na1';
-      const cluster = riotCluster(riotRegion);
-      const headers = { 'X-Riot-Token': RIOT_API_KEY };
-
-      let puuid, summonerName;
-      if (identifier.includes('#')) {
-        const [gameName, tagLine] = identifier.split('#');
-        const acctRes = await fetchJson(
-          `https://${cluster}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`,
-          headers
-        );
-        if (acctRes.status === 404) throw new Error('Riot ID not found');
-        if (acctRes.status !== 200) throw new Error(`Riot API error (${acctRes.status})`);
-        puuid = acctRes.body.puuid;
-        summonerName = identifier;
-      } else {
-        // Legacy summoner name lookup
-        const sumRes = await fetchJson(
-          `https://${riotRegion}.api.riotgames.com/lol/summoner/v4/summoners/by-name/${encodeURIComponent(identifier)}`,
-          headers
-        );
-        if (sumRes.status === 404) throw new Error('Summoner not found');
-        if (sumRes.status !== 200) throw new Error(`Riot API error (${sumRes.status})`);
-        puuid = sumRes.body.puuid;
-        summonerName = sumRes.body.name;
-      }
-
-      // Get summoner by PUUID to get encrypted summoner ID
-      const sumByPuuidRes = await fetchJson(
-        `https://${riotRegion}.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/${puuid}`,
-        headers
-      );
-      if (sumByPuuidRes.status !== 200) throw new Error('Could not retrieve summoner data');
-      const summonerId = sumByPuuidRes.body.id;
-      if (!summonerName) summonerName = sumByPuuidRes.body.name;
-
-      // Get ranked entries
-      const rankRes = await fetchJson(
-        `https://${riotRegion}.api.riotgames.com/lol/league/v4/entries/by-summoner/${summonerId}`,
-        headers
-      );
-      if (rankRes.status !== 200) throw new Error('Could not retrieve rank data');
-
-      const soloEntry = rankRes.body.find(e => e.queueType === 'RANKED_SOLO_5x5');
-      if (!soloEntry) {
-        // Unranked
-        return { username: identifier, current_rank_index: 0, peak_rank_index: 0, region: riotRegion, unranked: true };
-      }
-
-      const curIdx = lolRankIndex(soloEntry.tier, soloEntry.rank);
-      return {
-        username: identifier,
-        current_rank_index: curIdx,
-        peak_rank_index: curIdx, // Riot API doesn't expose peak rank for LoL directly
-        region: riotRegion,
-      };
-    }
-
-    // ── TEAMFIGHT TACTICS (Riot API) ──────────────────────────────────────────
-    case 'riot_tft': {
-      if (!RIOT_API_KEY) throw new Error('Riot API not configured on this server');
-      const riotRegion = region || 'na1';
-      const cluster = riotCluster(riotRegion);
-      const headers = { 'X-Riot-Token': RIOT_API_KEY };
-
-      let puuid;
-      if (identifier.includes('#')) {
-        const [gameName, tagLine] = identifier.split('#');
-        const acctRes = await fetchJson(
-          `https://${cluster}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`,
-          headers
-        );
-        if (acctRes.status === 404) throw new Error('Riot ID not found');
-        if (acctRes.status !== 200) throw new Error(`Riot API error (${acctRes.status})`);
-        puuid = acctRes.body.puuid;
-      } else {
-        const sumRes = await fetchJson(
-          `https://${riotRegion}.api.riotgames.com/tft/summoner/v1/summoners/by-name/${encodeURIComponent(identifier)}`,
-          headers
-        );
-        if (sumRes.status === 404) throw new Error('Summoner not found');
-        if (sumRes.status !== 200) throw new Error(`Riot API error (${sumRes.status})`);
-        puuid = sumRes.body.puuid;
-      }
-
-      const sumByPuuidRes = await fetchJson(
-        `https://${riotRegion}.api.riotgames.com/tft/summoner/v1/summoners/by-puuid/${puuid}`,
-        headers
-      );
-      if (sumByPuuidRes.status !== 200) throw new Error('Could not retrieve summoner data');
-      const summonerId = sumByPuuidRes.body.id;
-
-      const rankRes = await fetchJson(
-        `https://${riotRegion}.api.riotgames.com/tft/league/v1/entries/by-summoner/${summonerId}`,
-        headers
-      );
-      if (rankRes.status !== 200) throw new Error('Could not retrieve TFT rank data');
-
-      const entry = rankRes.body.find(e => e.queueType === 'RANKED_TFT');
-      if (!entry) {
-        return { username: identifier, current_rank_index: 0, peak_rank_index: 0, region: riotRegion, unranked: true };
-      }
-
-      const curIdx = tftRankIndex(entry.tier, entry.rank);
-      return { username: identifier, current_rank_index: curIdx, peak_rank_index: curIdx, region: riotRegion };
-    }
-
     // ── DOTA 2 (OpenDota API) ─────────────────────────────────────────────────
     case 'opendota': {
       let accountId = identifier.trim();
-      // Extract from Steam profile URL
       if (accountId.includes('steamcommunity.com')) {
-        const match = accountId.match(/\/profiles\/(\d+)/) || accountId.match(/\/id\/([^\/]+)/);
+        const match = accountId.match(/\/profiles\/(\d+)/) || accountId.match(/\/id\/([^/]+)/);
         if (!match) throw new Error('Invalid Steam URL format');
         if (/^\d+$/.test(match[1])) {
-          // Convert Steam64 to Steam32
           const steam64 = BigInt(match[1]);
           accountId = String(steam64 - BigInt('76561197960265728'));
         } else {
-          // Vanity URL — resolve via Steam API
           if (!process.env.STEAM_API_KEY) throw new Error('Steam vanity URL requires STEAM_API_KEY');
           const vanityRes = await fetchJson(
             `https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/?key=${process.env.STEAM_API_KEY}&vanityurl=${encodeURIComponent(match[1])}`
@@ -389,7 +349,6 @@ async function lookupRank(slug, identifier, region) {
           accountId = String(steam64 - BigInt('76561197960265728'));
         }
       } else if (/^\d{17}$/.test(accountId)) {
-        // Steam64 ID
         const steam64 = BigInt(accountId);
         accountId = String(steam64 - BigInt('76561197960265728'));
       } else if (!/^\d+$/.test(accountId)) {
@@ -413,14 +372,13 @@ async function lookupRank(slug, identifier, region) {
       if (res.status === 404) throw new Error('Chess.com user not found');
       if (res.status !== 200) throw new Error(`Chess.com API error (${res.status})`);
 
-      const subtype = cfg.subtype; // 'rapid' or 'blitz'
+      const subtype = cfg.subtype;
       const statsKey = `chess_${subtype}`;
       const stats = res.body[statsKey];
       if (!stats) throw new Error(`No ${subtype} rating found for this player`);
 
       const currentRating = stats.last?.rating || 0;
       const bestRating = stats.best?.rating || currentRating;
-
       const indexFn = subtype === 'rapid' ? chessRapidIndex : chessBlitzIndex;
       return {
         username,
@@ -468,9 +426,22 @@ async function lookupRank(slug, identifier, region) {
 // GET /api/verify/support — which games have API lookup
 router.get('/support', (req, res) => {
   const support = {};
+
+  // Tracker.gg games
+  for (const [slug] of Object.entries(TRACKER_GG_GAMES)) {
+    support[slug] = {
+      method: 'trackergg',
+      available: !!TRACKER_GG_API_KEY,
+      label: 'Tracker.gg Profile URL',
+      placeholder: 'https://tracker.gg/...',
+      help: 'Paste your tracker.gg profile URL. Your current and peak ranks will be auto-detected.',
+    };
+  }
+
+  // Legacy API games
   for (const [slug, cfg] of Object.entries(GAME_API_CONFIG)) {
     const available = cfg.requiresKey
-      ? (cfg.method === 'clashroyale' ? !!CLASH_ROYALE_API_KEY : !!RIOT_API_KEY)
+      ? (cfg.method === 'clashroyale' ? !!CLASH_ROYALE_API_KEY : false)
       : true;
     support[slug] = {
       label: cfg.label,
@@ -482,14 +453,39 @@ router.get('/support', (req, res) => {
       available,
     };
   }
+
   res.json(support);
 });
 
-// POST /api/verify/lookup — look up rank WITHOUT saving to DB (preview step)
+// POST /api/verify/lookup — look up rank WITHOUT saving (preview step)
 router.post('/lookup', authenticate, async (req, res) => {
   const { slug, identifier, region } = req.body;
   if (!slug || !identifier) return res.status(400).json({ error: 'slug and identifier are required' });
+
   try {
+    // Tracker.gg games
+    if (TRACKER_GG_GAMES[slug]) {
+      const game = db.prepare('SELECT * FROM games WHERE slug = ?').get(slug);
+      if (!game) return res.status(404).json({ error: 'Game not found' });
+      const ranks = JSON.parse(game.ranks);
+
+      const result = await lookupTrackerGG(slug, identifier);
+
+      const curIdx = Math.max(0, Math.min(findRankIndex(ranks, result.currentRankName), ranks.length - 1));
+      const peakIdx = Math.max(curIdx, Math.min(findRankIndex(ranks, result.peakRankName || result.currentRankName), ranks.length - 1));
+
+      return res.json({
+        success: true,
+        username: result.username,
+        current_rank_index: curIdx,
+        peak_rank_index: peakIdx,
+        current_rank: ranks[curIdx],
+        peak_rank: ranks[peakIdx],
+        platform: result.platform,
+      });
+    }
+
+    // Legacy games
     const result = await lookupRank(slug, identifier, region);
     res.json({ success: true, ...result });
   } catch (err) {
@@ -507,30 +503,40 @@ router.post('/refresh/:accountId', authenticate, async (req, res) => {
   `).get(req.params.accountId, req.userId);
 
   if (!account) return res.status(404).json({ error: 'Account not found' });
-  if (!GAME_API_CONFIG[account.slug]) return res.status(400).json({ error: 'This game does not support automatic rank lookup' });
+
+  const ranks = JSON.parse(account.ranks);
 
   try {
-    const result = await lookupRank(account.slug, account.platform_username, account.region || '');
-    const ranks = JSON.parse(account.ranks);
-    const curIdx = Math.max(0, Math.min(result.current_rank_index, ranks.length - 1));
-    const peakIdx = Math.max(curIdx, Math.min(
-      Math.max(result.peak_rank_index, account.peak_rank_index), // keep existing peak if higher
-      ranks.length - 1
-    ));
+    let curIdx, peakIdx, newUsername;
+
+    if (TRACKER_GG_GAMES[account.slug]) {
+      if (!account.tracker_url) return res.status(400).json({ error: 'No tracker.gg URL saved for this account' });
+      const result = await lookupTrackerGG(account.slug, account.tracker_url);
+      curIdx = Math.max(0, Math.min(findRankIndex(ranks, result.currentRankName), ranks.length - 1));
+      const peakFromApi = findRankIndex(ranks, result.peakRankName || result.currentRankName);
+      peakIdx = Math.max(curIdx, Math.min(Math.max(peakFromApi, account.peak_rank_index), ranks.length - 1));
+      newUsername = result.username;
+    } else {
+      if (!GAME_API_CONFIG[account.slug]) return res.status(400).json({ error: 'This game does not support automatic rank lookup' });
+      const result = await lookupRank(account.slug, account.platform_username, account.region || '');
+      curIdx = Math.max(0, Math.min(result.current_rank_index, ranks.length - 1));
+      peakIdx = Math.max(curIdx, Math.min(Math.max(result.peak_rank_index, account.peak_rank_index), ranks.length - 1));
+      newUsername = result.username;
+    }
 
     db.prepare(`
       UPDATE connected_accounts
       SET current_rank_index = ?, peak_rank_index = ?, platform_username = ?,
           verified = 1, verified_at = CURRENT_TIMESTAMP, last_updated = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(curIdx, peakIdx, result.username, account.id);
+    `).run(curIdx, peakIdx, newUsername, account.id);
 
     const newScore = updateUserGamerscore(req.userId);
     res.json({
       success: true,
       current_rank: ranks[curIdx],
       peak_rank: ranks[peakIdx],
-      username: result.username,
+      username: newUsername,
       gamerscore: newScore,
     });
   } catch (err) {

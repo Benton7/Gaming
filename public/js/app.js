@@ -3,6 +3,9 @@ let currentUser = null;
 let allGames = [];
 let activeModal = null;
 let connectingGameId = null;
+let connectingGameSlug = null;
+let connectingGameRanks = null;
+let detectedRankIndices = null; // { current_rank_index, peak_rank_index, username, platform }
 let updatingAccountId = null;
 let updatingAccountRanks = [];
 let updatingAccountTrackerUrl = null;
@@ -346,7 +349,7 @@ async function loadGames() {
           <span class="game-big-icon">${game.icon}</span>
           <div>
             <div class="game-card-name">${game.name}</div>
-            <div class="game-card-disconnected">${hasApi ? '⚡ Auto rank lookup available' : 'Not connected'}</div>
+            <div class="game-card-disconnected">${hasApi ? '⚡ tracker.gg rank lookup' : 'Not connected'}</div>
           </div>
         </div>
         <div class="game-card-actions">
@@ -1153,22 +1156,113 @@ function buildAvatarHtml(user, size = 'sm') {
 // ===== CONNECT GAME MODAL =====
 function openConnectGame(gameId, gameSlug, gameName, ranks) {
   connectingGameId = gameId;
+  connectingGameSlug = gameSlug;
+  connectingGameRanks = ranks;
+  detectedRankIndices = null;
   document.getElementById('connectGameTitle').textContent = `Connect ${gameName}`;
   hideError('connectGameError');
 
-  const currentSel = document.getElementById('connectCurrentRank');
-  const peakSel = document.getElementById('connectPeakRank');
-  currentSel.innerHTML = ranks.map((r, i) => `<option value="${i}">${r.name}</option>`).join('');
-  peakSel.innerHTML = ranks.map((r, i) => `<option value="${i}">${r.name}</option>`).join('');
+  const useTrackerGG = !!(verifySupport?.[gameSlug]?.method === 'trackergg');
 
-  currentSel.onchange = () => {
-    const curIdx = parseInt(currentSel.value);
-    if (parseInt(peakSel.value) < curIdx) peakSel.value = curIdx;
-  };
+  const apiMode = document.getElementById('connectApiMode');
+  const manualMode = document.getElementById('connectManualMode');
+  const lookupBtn = document.getElementById('connectLookupBtn');
+  const confirmBtn = document.getElementById('connectApiConfirmBtn');
+  const connectBtn = document.getElementById('connectGameBtn');
 
-  document.getElementById('connectUsername').value = '';
-  document.getElementById('connectTrackerUrl').value = '';
+  if (useTrackerGG) {
+    // Tracker.gg mode: show URL input only
+    apiMode.style.display = '';
+    manualMode.style.display = 'none';
+    lookupBtn.style.display = '';
+    confirmBtn.style.display = 'none';
+    connectBtn.style.display = 'none';
+
+    document.getElementById('connectApiLabel').textContent = 'Tracker.gg Profile URL';
+    document.getElementById('connectApiIdentifier').type = 'url';
+    document.getElementById('connectApiIdentifier').placeholder = `https://tracker.gg/${gameSlug}/profile/...`;
+    document.getElementById('connectApiHelp').textContent = 'Paste your tracker.gg profile URL. Your ranks will be auto-detected.';
+    document.getElementById('connectApiIdentifier').value = '';
+    document.getElementById('connectApiPreview').style.display = 'none';
+  } else {
+    // Manual mode
+    apiMode.style.display = 'none';
+    manualMode.style.display = '';
+    lookupBtn.style.display = 'none';
+    confirmBtn.style.display = 'none';
+    connectBtn.style.display = '';
+
+    const currentSel = document.getElementById('connectCurrentRank');
+    const peakSel = document.getElementById('connectPeakRank');
+    currentSel.innerHTML = ranks.map((r, i) => `<option value="${i}">${r.name}</option>`).join('');
+    peakSel.innerHTML = ranks.map((r, i) => `<option value="${i}">${r.name}</option>`).join('');
+    currentSel.onchange = () => {
+      const curIdx = parseInt(currentSel.value);
+      if (parseInt(peakSel.value) < curIdx) peakSel.value = curIdx;
+    };
+    document.getElementById('connectUsername').value = '';
+    document.getElementById('connectTrackerUrl').value = '';
+  }
+
   openModal('connectGameModal');
+}
+
+async function lookupGameRank() {
+  const btn = document.getElementById('connectLookupBtn');
+  const identifier = document.getElementById('connectApiIdentifier').value.trim();
+  if (!identifier) { showError('connectGameError', 'Please enter a tracker.gg profile URL'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '🔍 Looking up...';
+  hideError('connectGameError');
+  document.getElementById('connectApiPreview').style.display = 'none';
+
+  try {
+    const result = await api.verify.lookup({ slug: connectingGameSlug, identifier });
+    detectedRankIndices = result;
+
+    document.getElementById('connectApiPreviewName').textContent = result.username || identifier;
+    document.getElementById('connectApiPreviewCur').textContent = result.current_rank?.name || 'Unranked';
+    document.getElementById('connectApiPreviewCur').style.color = result.current_rank?.color || '#6b7280';
+    document.getElementById('connectApiPreviewPeak').textContent = result.peak_rank?.name || 'Unranked';
+    document.getElementById('connectApiPreviewPeak').style.color = result.peak_rank?.color || '#6b7280';
+    document.getElementById('connectApiPreview').style.display = '';
+
+    document.getElementById('connectApiConfirmBtn').style.display = '';
+  } catch (err) {
+    showError('connectGameError', err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔍 Look Up Rank';
+  }
+}
+
+async function confirmApiConnect() {
+  if (!detectedRankIndices) return;
+  const btn = document.getElementById('connectApiConfirmBtn');
+  btn.disabled = true;
+  hideError('connectGameError');
+  try {
+    const trackerUrl = document.getElementById('connectApiIdentifier').value.trim();
+    await api.games.connect({
+      game_id: connectingGameId,
+      platform_username: detectedRankIndices.username || trackerUrl,
+      platform: detectedRankIndices.platform || 'PC',
+      current_rank_index: detectedRankIndices.current_rank_index,
+      peak_rank_index: detectedRankIndices.peak_rank_index,
+      tracker_url: trackerUrl || null,
+      verified: true,
+    });
+    currentUser = await api.users.me();
+    updateNavUser();
+    closeAllModals();
+    showToast('Game account connected and verified!', 'success');
+    await loadGames();
+  } catch (err) {
+    showError('connectGameError', err.message);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function submitConnectGame() {

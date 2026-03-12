@@ -479,6 +479,77 @@ const allGames = [
       { name: 'Diamond I', value: 25, color: '#818cf8' }, { name: 'Diamond II', value: 26, color: '#818cf8' }, { name: 'Diamond III', value: 27, color: '#818cf8' }, { name: 'Diamond IV', value: 28, color: '#818cf8' }, { name: 'Diamond V', value: 29, color: '#818cf8' }, { name: 'Diamond VI', value: 30, color: '#818cf8' },
       { name: 'Onyx', value: 31, color: '#fbbf24' }
     ])
+  },
+  {
+    name: 'PUBG', slug: 'pubg', icon: '🎯', color: '#f59e0b', team_size: 4, bench_size: 0,
+    ranks: JSON.stringify([
+      { name: 'Bronze', value: 1, color: '#b45309' },
+      { name: 'Silver', value: 2, color: '#9ca3af' },
+      { name: 'Gold', value: 3, color: '#d97706' },
+      { name: 'Platinum', value: 4, color: '#0ea5e9' },
+      { name: 'Diamond', value: 5, color: '#818cf8' },
+      { name: 'Master', value: 6, color: '#9333ea' },
+      { name: 'Grandmaster', value: 7, color: '#fbbf24' }
+    ])
+  },
+  {
+    name: 'Destiny 2', slug: 'destiny-2', icon: '🌟', color: '#6366f1', team_size: 3, bench_size: 0,
+    ranks: JSON.stringify([
+      { name: 'Guardian', value: 1, color: '#78716c' },
+      { name: 'Brave', value: 2, color: '#b45309' },
+      { name: 'Heroic', value: 3, color: '#9ca3af' },
+      { name: 'Fabled', value: 4, color: '#d97706' },
+      { name: 'Mythic', value: 5, color: '#0ea5e9' },
+      { name: 'Legend', value: 6, color: '#818cf8' },
+      { name: 'Ascendant', value: 7, color: '#fbbf24' }
+    ])
+  },
+  {
+    name: 'Smite 2', slug: 'smite-2', icon: '⚡', color: '#f97316', team_size: 5, bench_size: 0,
+    ranks: JSON.stringify([
+      { name: 'Bronze III', value: 1, color: '#b45309' }, { name: 'Bronze II', value: 2, color: '#b45309' }, { name: 'Bronze I', value: 3, color: '#b45309' },
+      { name: 'Silver III', value: 4, color: '#9ca3af' }, { name: 'Silver II', value: 5, color: '#9ca3af' }, { name: 'Silver I', value: 6, color: '#9ca3af' },
+      { name: 'Gold III', value: 7, color: '#d97706' }, { name: 'Gold II', value: 8, color: '#d97706' }, { name: 'Gold I', value: 9, color: '#d97706' },
+      { name: 'Platinum III', value: 10, color: '#0ea5e9' }, { name: 'Platinum II', value: 11, color: '#0ea5e9' }, { name: 'Platinum I', value: 12, color: '#0ea5e9' },
+      { name: 'Diamond III', value: 13, color: '#818cf8' }, { name: 'Diamond II', value: 14, color: '#818cf8' }, { name: 'Diamond I', value: 15, color: '#818cf8' },
+      { name: 'Masters', value: 16, color: '#9333ea' },
+      { name: 'Grandmaster', value: 17, color: '#fbbf24' }
+    ])
+  },
+  {
+    name: 'Splitgate 2', slug: 'splitgate-2', icon: '🌀', color: '#8b5cf6', team_size: 4, bench_size: 0,
+    ranks: JSON.stringify([
+      { name: 'Bronze I', value: 1, color: '#b45309' }, { name: 'Bronze II', value: 2, color: '#b45309' }, { name: 'Bronze III', value: 3, color: '#b45309' },
+      { name: 'Silver I', value: 4, color: '#9ca3af' }, { name: 'Silver II', value: 5, color: '#9ca3af' }, { name: 'Silver III', value: 6, color: '#9ca3af' },
+      { name: 'Gold I', value: 7, color: '#d97706' }, { name: 'Gold II', value: 8, color: '#d97706' }, { name: 'Gold III', value: 9, color: '#d97706' },
+      { name: 'Platinum I', value: 10, color: '#0ea5e9' }, { name: 'Platinum II', value: 11, color: '#0ea5e9' }, { name: 'Platinum III', value: 12, color: '#0ea5e9' },
+      { name: 'Diamond I', value: 13, color: '#818cf8' }, { name: 'Diamond II', value: 14, color: '#818cf8' }, { name: 'Diamond III', value: 15, color: '#818cf8' },
+      { name: 'Emerald', value: 16, color: '#10b981' },
+      { name: 'Champion', value: 17, color: '#fbbf24' }
+    ])
+  },
+  {
+    name: 'Battlefield 2042', slug: 'battlefield-2042', icon: '💥', color: '#dc2626', team_size: 5, bench_size: 0,
+    ranks: JSON.stringify([
+      { name: 'Bronze I', value: 1, color: '#b45309' }, { name: 'Bronze II', value: 2, color: '#b45309' }, { name: 'Bronze III', value: 3, color: '#b45309' },
+      { name: 'Silver I', value: 4, color: '#9ca3af' }, { name: 'Silver II', value: 5, color: '#9ca3af' }, { name: 'Silver III', value: 6, color: '#9ca3af' },
+      { name: 'Gold I', value: 7, color: '#d97706' }, { name: 'Gold II', value: 8, color: '#d97706' }, { name: 'Gold III', value: 9, color: '#d97706' },
+      { name: 'Platinum I', value: 10, color: '#0ea5e9' }, { name: 'Platinum II', value: 11, color: '#0ea5e9' }, { name: 'Platinum III', value: 12, color: '#0ea5e9' },
+      { name: 'Diamond I', value: 13, color: '#818cf8' }, { name: 'Diamond II', value: 14, color: '#818cf8' }, { name: 'Diamond III', value: 15, color: '#818cf8' },
+      { name: 'Elite', value: 16, color: '#fbbf24' }
+    ])
+  },
+  {
+    name: 'Roblox', slug: 'roblox', icon: '🧱', color: '#ef4444', team_size: 4, bench_size: 0,
+    ranks: JSON.stringify([
+      { name: 'Beginner', value: 1, color: '#78716c' },
+      { name: 'Bronze', value: 2, color: '#b45309' },
+      { name: 'Silver', value: 3, color: '#9ca3af' },
+      { name: 'Gold', value: 4, color: '#d97706' },
+      { name: 'Platinum', value: 5, color: '#0ea5e9' },
+      { name: 'Diamond', value: 6, color: '#818cf8' },
+      { name: 'Master', value: 7, color: '#fbbf24' }
+    ])
   }
 ];
 
