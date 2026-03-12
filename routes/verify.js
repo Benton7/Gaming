@@ -8,7 +8,6 @@ const router = express.Router();
 
 const RIOT_API_KEY = process.env.RIOT_API_KEY || '';
 const CLASH_ROYALE_API_KEY = process.env.CLASH_ROYALE_API_KEY || '';
-const TRACKER_GG_API_KEY = process.env.TRACKER_GG_API_KEY || '';
 
 // ─── TRACKER.GG GAME CONFIG ───────────────────────────────────────────────────
 // trnSlug: the game slug used by tracker.gg API
@@ -229,29 +228,30 @@ function clashRoyaleIndex(trophies) {
 
 // ─── TRACKER.GG LOOKUP ────────────────────────────────────────────────────────
 async function lookupTrackerGG(slug, trnUrl) {
-  if (!TRACKER_GG_API_KEY) throw new Error('Tracker.gg API key not configured on this server');
-
   const cfg = TRACKER_GG_GAMES[slug];
   if (!cfg) throw new Error('This game is not configured for tracker.gg lookup');
 
   // Parse tracker.gg URL: https://tracker.gg/{game}/profile/{platform}/{username}/...
-  const match = trnUrl.match(/tracker\.gg\/[^/]+\/profile\/([^/]+)\/([^/?#]+)/);
+  // e.g. https://tracker.gg/valorant/profile/riot/ungun%230000/overview?playlist=competitive
+  const match = trnUrl.match(/tracker\.gg\/([^/]+)\/profile\/([^/]+)\/([^/?#]+)/);
   if (!match) {
-    throw new Error('Invalid tracker.gg URL. Expected format: https://tracker.gg/{game}/profile/{platform}/{username}');
+    throw new Error('Invalid tracker.gg URL. Expected: https://tracker.gg/{game}/profile/{platform}/{username}');
   }
 
-  const platform = match[1];
-  const username = decodeURIComponent(match[2]);
+  const trnGame = match[1];  // game slug from the URL (e.g. "valorant", "apex")
+  const platform = match[2];
+  const username = decodeURIComponent(match[3]);
 
-  const apiUrl = `https://public-api.tracker.gg/v2/${cfg.trnSlug}/standard/profile/${platform}/${encodeURIComponent(username)}`;
+  // Call api.tracker.gg — no key required
+  const apiUrl = `https://api.tracker.gg/api/v2/${trnGame}/standard/profile/${platform}/${encodeURIComponent(username)}`;
   const res = await fetchJson(apiUrl, {
-    'TRN-Api-Key': TRACKER_GG_API_KEY,
     'Accept': 'application/json',
+    'Accept-Language': 'en-US,en;q=0.9',
   });
 
   if (res.status === 404) throw new Error('Profile not found on tracker.gg');
-  if (res.status === 403) throw new Error('Tracker.gg API key invalid or unauthorized');
   if (res.status === 429) throw new Error('Rate limited by tracker.gg — please try again in a moment');
+  if (res.status === 403 || res.status === 401) throw new Error('tracker.gg denied the request — try again shortly');
   if (res.status !== 200) throw new Error(`Tracker.gg API error (${res.status})`);
 
   const data = res.body?.data;
@@ -427,11 +427,11 @@ async function lookupRank(slug, identifier, region) {
 router.get('/support', (req, res) => {
   const support = {};
 
-  // Tracker.gg games
+  // Tracker.gg games (no API key required)
   for (const [slug] of Object.entries(TRACKER_GG_GAMES)) {
     support[slug] = {
       method: 'trackergg',
-      available: !!TRACKER_GG_API_KEY,
+      available: true,
       label: 'Tracker.gg Profile URL',
       placeholder: 'https://tracker.gg/...',
       help: 'Paste your tracker.gg profile URL. Your current and peak ranks will be auto-detected.',
