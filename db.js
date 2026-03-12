@@ -219,6 +219,7 @@ const acctCols = db.pragma('table_info(connected_accounts)').map(c => c.name);
 if (!acctCols.includes('tracker_url')) db.exec('ALTER TABLE connected_accounts ADD COLUMN tracker_url TEXT');
 if (!acctCols.includes('verified')) db.exec('ALTER TABLE connected_accounts ADD COLUMN verified INTEGER DEFAULT 0');
 if (!acctCols.includes('verified_at')) db.exec('ALTER TABLE connected_accounts ADD COLUMN verified_at DATETIME');
+if (!acctCols.includes('region')) db.exec("ALTER TABLE connected_accounts ADD COLUMN region TEXT DEFAULT ''");
 
 const clubCols = db.pragma('table_info(clubs)').map(c => c.name);
 if (!clubCols.includes('club_color')) db.exec("ALTER TABLE clubs ADD COLUMN club_color TEXT DEFAULT '#6366f1'");

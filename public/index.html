@@ -457,35 +457,68 @@
     </div>
     <div class="modal-body">
       <div id="connectGameError" class="alert alert-error" style="display:none"></div>
-      <div class="form-group">
-        <label class="form-label">Your In-Game Username</label>
-        <input type="text" class="form-input" id="connectUsername" placeholder="Enter your username in this game" />
+
+      <!-- API Mode (auto-lookup) -->
+      <div id="connectApiMode" style="display:none">
+        <div class="api-connect-banner">
+          <span class="api-banner-icon">⚡</span>
+          <div>
+            <div style="font-weight:700;font-size:0.88rem">Automatic Rank Lookup</div>
+            <div style="font-size:0.75rem;color:var(--text-2)" id="connectApiHelp"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" id="connectApiLabel">Identifier</label>
+          <input type="text" class="form-input" id="connectApiIdentifier" placeholder="" />
+        </div>
+        <div class="form-group" id="connectApiRegionGroup" style="display:none">
+          <label class="form-label">Server Region</label>
+          <select class="form-input" id="connectApiRegion"></select>
+        </div>
+        <div id="connectApiPreview" style="display:none" class="api-rank-preview">
+          <div style="font-size:0.78rem;color:var(--text-3);margin-bottom:0.4rem">Found account:</div>
+          <div class="api-preview-name" id="connectApiPreviewName"></div>
+          <div class="api-preview-ranks">
+            <span>Current: <strong id="connectApiPreviewCur" class="rank-badge"></strong></span>
+            <span>Peak: <strong id="connectApiPreviewPeak" class="rank-badge"></strong></span>
+          </div>
+        </div>
       </div>
-      <div class="form-group">
-        <label class="form-label">Platform</label>
-        <select class="form-input" id="connectPlatform">
-          <option value="PC">PC</option>
-          <option value="PlayStation">PlayStation</option>
-          <option value="Xbox">Xbox</option>
-          <option value="Nintendo Switch">Nintendo Switch</option>
-          <option value="Mobile">Mobile</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Current Rank</label>
-        <select class="form-input" id="connectCurrentRank"></select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Peak Rank (All-Time Best)</label>
-        <select class="form-input" id="connectPeakRank"></select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Tracker.gg Profile URL <span style="color:var(--text-3);font-weight:400;text-transform:none">(optional — shows a Linked badge)</span></label>
-        <input type="url" class="form-input" id="connectTrackerUrl" placeholder="https://tracker.gg/valorant/profile/..." />
+
+      <!-- Manual Mode -->
+      <div id="connectManualMode">
+        <div class="form-group">
+          <label class="form-label">Your In-Game Username</label>
+          <input type="text" class="form-input" id="connectUsername" placeholder="Enter your username in this game" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Platform</label>
+          <select class="form-input" id="connectPlatform">
+            <option value="PC">PC</option>
+            <option value="PlayStation">PlayStation</option>
+            <option value="Xbox">Xbox</option>
+            <option value="Nintendo Switch">Nintendo Switch</option>
+            <option value="Mobile">Mobile</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Current Rank</label>
+          <select class="form-input" id="connectCurrentRank"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Peak Rank (All-Time Best)</label>
+          <select class="form-input" id="connectPeakRank"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tracker.gg Profile URL <span style="color:var(--text-3);font-weight:400;text-transform:none">(optional)</span></label>
+          <input type="url" class="form-input" id="connectTrackerUrl" placeholder="https://tracker.gg/..." />
+        </div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeAllModals()">Cancel</button>
+      <button class="btn btn-outline" onclick="lookupGameRank()" id="connectLookupBtn" style="display:none">🔍 Look Up Rank</button>
+      <button class="btn btn-success" onclick="confirmApiConnect()" id="connectApiConfirmBtn" style="display:none">✓ Connect (Verified)</button>
       <button class="btn btn-primary" onclick="submitConnectGame()" id="connectGameBtn">Connect</button>
     </div>
   </div>

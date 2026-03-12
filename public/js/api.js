@@ -74,7 +74,7 @@ const api = {
   },
   verify: {
     support: () => req('GET', '/api/verify/support'),
-    riot: (accountId, riotId) => req('POST', `/api/verify/riot/${accountId}`, { riotId }),
-    steam: (accountId, steamId) => req('POST', `/api/verify/steam/${accountId}`, { steamId }),
+    lookup: (body) => req('POST', '/api/verify/lookup', body),
+    refresh: (accountId) => req('POST', `/api/verify/refresh/${accountId}`),
   },
 };

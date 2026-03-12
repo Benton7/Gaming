@@ -290,6 +290,7 @@ async function loadGames() {
   try {
     currentUser = await api.users.me();
     allGames = await api.games.list();
+    if (!verifySupport) verifySupport = await api.verify.support().catch(() => ({}));
   } catch { return; }
 
   const connected = {};
@@ -299,16 +300,23 @@ async function loadGames() {
   grid.innerHTML = allGames.map(game => {
     const acct = connected[game.id];
     const style = `--game-color: ${game.color}`;
+    const hasApi = !!(verifySupport[game.slug]?.available);
+
     if (acct) {
       const trackerBadge = acct.tracker_url
         ? `<a href="${escapeHtml(acct.tracker_url)}" target="_blank" rel="noopener" class="tracker-badge">🔗 Profile Linked</a>`
         : '';
+      const verifiedBadge = acct.verified
+        ? `<span class="game-verified-badge">✓ Verified</span>` : '';
+      const actionBtn = hasApi
+        ? `<button class="btn btn-cyan btn-sm" onclick="refreshGameRank(${acct.id}, '${game.slug}', this)">↻ Refresh Rank</button>`
+        : `<button class="btn btn-ghost btn-sm" onclick="openUpdateRank(${acct.id}, ${JSON.stringify(game.ranks).replace(/"/g, '&quot;')}, ${acct.current_rank_index}, ${acct.peak_rank_index}, ${JSON.stringify(acct.tracker_url || '').replace(/"/g, '&quot;')})">Update Rank</button>`;
       return `
       <div class="game-card" style="${style}">
         <div class="game-card-header">
           <span class="game-big-icon">${game.icon}</span>
           <div>
-            <div class="game-card-name">${game.name}</div>
+            <div class="game-card-name">${game.name} ${verifiedBadge}</div>
             <div class="game-card-connected">◈ Connected · ${escapeHtml(acct.platform_username)}</div>
           </div>
         </div>
@@ -321,32 +329,60 @@ async function loadGames() {
             <span class="connected-label">Peak Rank</span>
             <span style="font-weight:700;color:${acct.peak_rank ? acct.peak_rank.color : '#6b7280'};text-shadow:0 0 6px currentColor">${acct.peak_rank ? acct.peak_rank.name : 'Unranked'}</span>
           </div>
-          <div class="connected-row">
-            <span class="connected-label">Platform</span>
-            <span class="game-platform">${acct.platform}</span>
-          </div>
+          ${!hasApi ? `<div class="connected-row"><span class="connected-label">Platform</span><span class="game-platform">${acct.platform}</span></div>` : ''}
         </div>
         ${trackerBadge ? `<div style="margin-bottom:0.75rem">${trackerBadge}</div>` : ''}
         <div class="game-card-actions">
-          <button class="btn btn-ghost btn-sm" onclick="openUpdateRank(${acct.id}, ${JSON.stringify(game.ranks).replace(/"/g, '&quot;')}, ${acct.current_rank_index}, ${acct.peak_rank_index}, ${JSON.stringify(acct.tracker_url || '').replace(/"/g, '&quot;')})">Update Rank</button>
+          ${actionBtn}
+          ${hasApi ? '' : ''}
+          <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="disconnectAccountById(${acct.id})">Disconnect</button>
         </div>
       </div>`;
     } else {
+      const connectLabel = hasApi ? '⚡ Connect & Verify' : 'Connect Account';
       return `
       <div class="game-card" style="${style}">
         <div class="game-card-header">
           <span class="game-big-icon">${game.icon}</span>
           <div>
             <div class="game-card-name">${game.name}</div>
-            <div class="game-card-disconnected">Not connected</div>
+            <div class="game-card-disconnected">${hasApi ? '⚡ Auto rank lookup available' : 'Not connected'}</div>
           </div>
         </div>
         <div class="game-card-actions">
-          <button class="btn btn-primary btn-sm" onclick="openConnectGame(${game.id}, '${game.name}', ${JSON.stringify(game.ranks).replace(/"/g, '&quot;')})">Connect Account</button>
+          <button class="btn btn-primary btn-sm" onclick="openConnectGame(${game.id}, '${game.slug}', '${game.name}', ${JSON.stringify(game.ranks).replace(/"/g, '&quot;')})">${connectLabel}</button>
         </div>
       </div>`;
     }
   }).join('');
+}
+
+async function refreshGameRank(accountId, slug, btn) {
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Refreshing...';
+  try {
+    const res = await api.verify.refresh(accountId);
+    currentUser = await api.users.me();
+    updateNavUser();
+    showToast(`Rank updated! ${res.current_rank?.name || ''} · Gamerscore: ${formatScore(res.gamerscore)}`, 'success');
+    await loadGames();
+  } catch (err) {
+    btn.disabled = false; btn.textContent = orig;
+    showToast(`Refresh failed: ${err.message}`, 'error');
+  }
+}
+
+async function disconnectAccountById(accountId) {
+  if (!confirm('Disconnect this game account?')) return;
+  try {
+    await api.games.disconnect(accountId);
+    currentUser = await api.users.me();
+    updateNavUser();
+    showToast('Account disconnected.', 'success');
+    await loadGames();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
 }
 
 // ===== CLUBS PAGE =====

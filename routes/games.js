@@ -10,7 +10,7 @@ router.get('/', (req, res) => {
 });
 
 router.post('/accounts', authenticate, (req, res) => {
-  const { game_id, platform_username, platform, current_rank_index, peak_rank_index, tracker_url } = req.body;
+  const { game_id, platform_username, platform, current_rank_index, peak_rank_index, tracker_url, verified, region } = req.body;
   if (!game_id || !platform_username) {
     return res.status(400).json({ error: 'game_id and platform_username are required' });
   }
@@ -24,10 +24,16 @@ router.post('/accounts', authenticate, (req, res) => {
 
   try {
     const stmt = db.prepare(`
-      INSERT INTO connected_accounts (user_id, game_id, platform_username, platform, current_rank_index, peak_rank_index, tracker_url)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO connected_accounts (user_id, game_id, platform_username, platform, current_rank_index, peak_rank_index, tracker_url, verified, verified_at, region)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    const result = stmt.run(req.userId, game_id, platform_username, platform || 'PC', curIdx, peakIdx, tracker_url || null);
+    const result = stmt.run(
+      req.userId, game_id, platform_username, platform || 'PC', curIdx, peakIdx,
+      tracker_url || null,
+      verified ? 1 : 0,
+      verified ? new Date().toISOString() : null,
+      region || ''
+    );
     const newScore = updateUserGamerscore(req.userId);
 
     res.json({
