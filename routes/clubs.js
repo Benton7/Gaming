@@ -1,5 +1,5 @@
 const express = require('express');
-const { db, getClubAverageGamerscore, getClubAverageGamescoреForMembers, getClubGameAverages } = require('../db');
+const { db, getClubAverageGamerscore, getAvgGSForMembers, getClubGameAverages, createMatch } = require('../db');
 const { authenticate } = require('./middleware');
 
 const router = express.Router();
@@ -296,31 +296,31 @@ router.post('/open-challenges/:id/accept', authenticate, (req, res) => {
   let challengerIds = [];
   try { challengerIds = JSON.parse(challenge.participant_ids); } catch {}
 
-  const challengerScore = getClubAverageGamescoреForMembers(challengerIds);
-  const challengedScore = getClubAverageGamescoреForMembers(participant_ids);
-  const winnerId = challengerScore >= challengedScore ? challenge.club_id : acceptingClubId;
-  const loserId = winnerId === challenge.club_id ? acceptingClubId : challenge.club_id;
-  const scoreAwarded = 100;
+  let game_ids = [];
+  try { game_ids = JSON.parse(challenge.game_ids); } catch {}
+
+  const challengerClub = db.prepare('SELECT * FROM clubs WHERE id = ?').get(challenge.club_id);
+  const acceptingClub = db.prepare('SELECT * FROM clubs WHERE id = ?').get(acceptingClubId);
+
+  const matchId = createMatch({
+    match_type: 'club',
+    entity_a_id: challenge.club_id,
+    entity_b_id: acceptingClubId,
+    entity_a_label: `[${challengerClub.tag}] ${challengerClub.name}`,
+    entity_b_label: `[${acceptingClub.tag}] ${acceptingClub.name}`,
+    participant_a_ids: challengerIds,
+    participant_b_ids: participant_ids,
+    game_ids,
+    description: challenge.description
+  });
 
   db.prepare(`
     UPDATE open_challenges
-    SET status = 'completed', accepted_by_club_id = ?, accepted_participant_ids = ?,
-        challenger_score = ?, challenged_score = ?, winner_id = ?, score_awarded = ?,
-        resolved_at = CURRENT_TIMESTAMP
+    SET status = 'active', accepted_by_club_id = ?, accepted_participant_ids = ?, match_id = ?
     WHERE id = ?
-  `).run(acceptingClubId, JSON.stringify(participant_ids), challengerScore, challengedScore, winnerId, scoreAwarded, challenge.id);
+  `).run(acceptingClubId, JSON.stringify(participant_ids), matchId, challenge.id);
 
-  db.prepare('UPDATE clubs SET club_score = club_score + ?, wins = wins + 1 WHERE id = ?').run(scoreAwarded, winnerId);
-  db.prepare('UPDATE clubs SET losses = losses + 1 WHERE id = ?').run(loserId);
-
-  const winner = db.prepare('SELECT name, tag FROM clubs WHERE id = ?').get(winnerId);
-  res.json({
-    status: 'completed',
-    challenger_score: challengerScore,
-    challenged_score: challengedScore,
-    winner,
-    score_awarded: scoreAwarded
-  });
+  res.json({ status: 'active', match_id: matchId });
 });
 
 // Respond to targeted challenge
@@ -343,30 +343,28 @@ router.post('/challenges/:challengeId/respond', authenticate, (req, res) => {
     return res.json({ status: 'declined' });
   }
 
-  const challengerScore = getClubAverageGamerscore(challenge.challenger_id);
-  const challengedScore = getClubAverageGamerscore(challenge.challenged_id);
-  const winnerId = challengerScore >= challengedScore ? challenge.challenger_id : challenge.challenged_id;
-  const loserId = winnerId === challenge.challenger_id ? challenge.challenged_id : challenge.challenger_id;
-  const scoreAwarded = 100;
+  // Create a match room — resolution happens in-match
+  const challengerClub = db.prepare('SELECT * FROM clubs WHERE id = ?').get(challenge.challenger_id);
+  const challengedClub = db.prepare('SELECT * FROM clubs WHERE id = ?').get(challenge.challenged_id);
 
-  db.prepare(`
-    UPDATE club_challenges
-    SET status = 'completed', challenger_score = ?, challenged_score = ?,
-        winner_id = ?, score_awarded = ?, resolved_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(challengerScore, challengedScore, winnerId, scoreAwarded, challenge.id);
+  const challengerMembers = db.prepare('SELECT user_id FROM club_members WHERE club_id = ?').all(challenge.challenger_id).map(m => m.user_id);
+  const challengedMembers = db.prepare('SELECT user_id FROM club_members WHERE club_id = ?').all(challenge.challenged_id).map(m => m.user_id);
 
-  db.prepare('UPDATE clubs SET club_score = club_score + ?, wins = wins + 1 WHERE id = ?').run(scoreAwarded, winnerId);
-  db.prepare('UPDATE clubs SET losses = losses + 1 WHERE id = ?').run(loserId);
-
-  const winner = db.prepare('SELECT name, tag FROM clubs WHERE id = ?').get(winnerId);
-  res.json({
-    status: 'completed',
-    challenger_score: challengerScore,
-    challenged_score: challengedScore,
-    winner,
-    score_awarded: scoreAwarded
+  const matchId = createMatch({
+    match_type: 'club',
+    entity_a_id: challenge.challenger_id,
+    entity_b_id: challenge.challenged_id,
+    entity_a_label: `[${challengerClub.tag}] ${challengerClub.name}`,
+    entity_b_label: `[${challengedClub.tag}] ${challengedClub.name}`,
+    participant_a_ids: challengerMembers,
+    participant_b_ids: challengedMembers,
+    game_ids: challenge.game_id ? [challenge.game_id] : [],
+    description: null
   });
+
+  db.prepare("UPDATE club_challenges SET status = 'active', match_id = ? WHERE id = ?").run(matchId, challenge.id);
+
+  res.json({ status: 'active', match_id: matchId });
 });
 
 // Club leaderboard
