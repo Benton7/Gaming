@@ -319,12 +319,16 @@
       <div class="tabs">
         <button class="tab active" onclick="switchTab('players', this)">Players</button>
         <button class="tab" onclick="switchTab('clubs', this)">Clubs</button>
+        <button class="tab" onclick="switchTab('friends', this)">Friends</button>
       </div>
       <div id="tabPlayers" class="tab-content active">
         <div id="playerLeaderboard"></div>
       </div>
       <div id="tabClubs" class="tab-content">
         <div id="clubLeaderboard"></div>
+      </div>
+      <div id="tabFriends" class="tab-content">
+        <div id="friendLeaderboard"></div>
       </div>
     </div>
   </section>
@@ -333,29 +337,59 @@
   <section id="page-profile" class="page page-app">
     <div class="container">
       <h1 class="page-title">Profile</h1>
+
+      <!-- Profile card + edit side by side -->
       <div class="profile-grid">
+        <!-- Left: Profile card -->
         <div class="profile-card">
-          <div class="profile-banner" id="profileBanner"></div>
+          <div class="profile-banner" id="profileBanner">
+            <label class="banner-upload-btn" title="Change banner color" onclick="scrollToEdit()">✎</label>
+          </div>
           <div class="profile-card-content">
             <div class="profile-avatar-wrap">
               <div class="avatar-lg" id="profileAvatar"></div>
+              <label class="avatar-upload-btn" title="Upload photo">
+                <input type="file" id="avatarFileInput" accept="image/*" style="display:none" onchange="handleAvatarUpload(event)" />
+                📷
+              </label>
             </div>
+            <div class="profile-title-badge" id="profileTitleBadge" style="display:none"></div>
             <h2 class="profile-name" id="profileGamertag"></h2>
             <p class="profile-username" id="profileUsername"></p>
             <p class="profile-bio" id="profileBio"></p>
-            <div class="profile-score-badge">
-              <span>Gamerscore</span>
-              <strong class="mono" id="profileGamerscore">0</strong>
+            <div class="profile-stats-row">
+              <div class="profile-stat">
+                <span class="profile-stat-val mono" id="profileGamerscore">0</span>
+                <span class="profile-stat-label">Gamerscore</span>
+              </div>
+              <div class="profile-stat">
+                <span class="profile-stat-val" id="profileFriendCount">0</span>
+                <span class="profile-stat-label">Friends</span>
+              </div>
+              <div class="profile-stat">
+                <span class="profile-stat-val" id="profileGamesCount">0</span>
+                <span class="profile-stat-label">Games</span>
+              </div>
             </div>
+            <!-- Club badge -->
+            <div id="profileClubBadge" style="display:none" class="profile-club-badge"></div>
+            <!-- Social links -->
+            <div id="profileSocialLinks" class="profile-social-row"></div>
           </div>
         </div>
-        <div class="profile-edit-card">
+
+        <!-- Right: Edit -->
+        <div class="profile-edit-card" id="profileEditCard">
           <h3 class="card-title" style="margin-bottom:1.25rem">Edit Profile</h3>
           <div id="profileEditError" class="alert alert-error" style="display:none"></div>
           <div id="profileEditSuccess" class="alert alert-success" style="display:none"></div>
           <div class="form-group">
             <label class="form-label">Gamertag</label>
             <input type="text" class="form-input" id="editGamertag" placeholder="Display name" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Custom Title <span style="color:var(--text-3);font-weight:400;text-transform:none">(shown under your name)</span></label>
+            <input type="text" class="form-input" id="editTitle" placeholder='e.g. "The Undefeated"' maxlength="40" />
           </div>
           <div class="form-group">
             <label class="form-label">Bio</label>
@@ -369,7 +403,42 @@
             <label class="form-label">Profile Banner Color</label>
             <div class="color-swatches" id="bannerSwatches"></div>
           </div>
+          <div class="form-group">
+            <label class="form-label">Social Links</label>
+            <div style="display:flex;flex-direction:column;gap:0.5rem">
+              <div class="social-input-wrap"><span class="social-icon">🟣</span><input type="text" class="form-input" id="editTwitch" placeholder="Twitch username" /></div>
+              <div class="social-input-wrap"><span class="social-icon">𝕏</span><input type="text" class="form-input" id="editTwitter" placeholder="Twitter/X handle" /></div>
+              <div class="social-input-wrap"><span class="social-icon">💬</span><input type="text" class="form-input" id="editDiscord" placeholder="Discord username" /></div>
+              <div class="social-input-wrap"><span class="social-icon">📺</span><input type="text" class="form-input" id="editYoutube" placeholder="YouTube channel" /></div>
+            </div>
+          </div>
           <button class="btn btn-primary" onclick="saveProfile()">Save Changes</button>
+        </div>
+      </div>
+
+      <!-- Games ranked best to worst -->
+      <div style="margin-top:2rem">
+        <h2 class="section-title" style="margin-bottom:1rem">Game Ranks</h2>
+        <div id="profileGamesList" class="profile-games-list"></div>
+      </div>
+
+      <!-- Teams -->
+      <div id="profileTeamsSection" style="display:none;margin-top:2rem">
+        <h2 class="section-title" style="margin-bottom:1rem">Teams</h2>
+        <div id="profileTeamsList" class="profile-teams-list"></div>
+      </div>
+
+      <!-- Friends -->
+      <div style="margin-top:2rem">
+        <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;flex-wrap:wrap">
+          <h2 class="section-title" style="margin:0">Friends</h2>
+          <span id="profileFriendRequestsBadge" class="friend-requests-badge" style="display:none"></span>
+          <button class="btn btn-sm btn-primary" onclick="openAddFriendModal()">+ Add Friend</button>
+        </div>
+        <div id="profileFriendsList" class="friends-grid"></div>
+        <div id="profileFriendRequestsList" style="display:none;margin-top:1.5rem">
+          <h3 style="font-size:0.85rem;color:var(--text-2);margin-bottom:0.75rem">Pending Requests</h3>
+          <div id="pendingRequestsGrid" class="friends-grid"></div>
         </div>
       </div>
     </div>
@@ -695,6 +764,57 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeAllModals()">Cancel</button>
       <button class="btn btn-success" onclick="submitAcceptOpenChallenge()">⚡ Accept & Compete</button>
+    </div>
+  </div>
+
+  <!-- Add Friend Modal -->
+  <div class="modal" id="addFriendModal">
+    <div class="modal-header">
+      <h3 class="modal-title">Add Friend</h3>
+      <button class="modal-close" onclick="closeAllModals()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="addFriendError" class="alert alert-error" style="display:none"></div>
+      <div id="addFriendSuccess" class="alert alert-success" style="display:none"></div>
+      <div class="form-group">
+        <label class="form-label">Search by username or gamertag</label>
+        <div style="display:flex;gap:0.5rem">
+          <input type="text" class="form-input" id="friendSearchInput" placeholder="Username or gamertag..." oninput="searchFriendUsers(this.value)" />
+        </div>
+      </div>
+      <div id="friendSearchResults" class="friend-search-results"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeAllModals()">Close</button>
+    </div>
+  </div>
+
+  <!-- Verify Account Modal -->
+  <div class="modal" id="verifyAccountModal">
+    <div class="modal-header">
+      <h3 class="modal-title" id="verifyModalTitle">✓ Verify Account</h3>
+      <button class="modal-close" onclick="closeAllModals()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="verifyError" class="alert alert-error" style="display:none"></div>
+      <div id="verifySuccess" class="alert alert-success" style="display:none"></div>
+      <div id="verifyModalBody">
+        <p style="font-size:0.85rem;color:var(--text-2);margin-bottom:1rem" id="verifyDescription"></p>
+        <div class="form-group" id="verifyRiotGroup" style="display:none">
+          <label class="form-label">Riot ID</label>
+          <input type="text" class="form-input" id="verifyRiotId" placeholder="PlayerName#TAG" />
+          <p style="font-size:0.75rem;color:var(--text-3);margin-top:0.25rem">Enter your full Riot ID (e.g. PlayerName#NA1). Your account will be confirmed via the Riot API.</p>
+        </div>
+        <div class="form-group" id="verifySteamGroup" style="display:none">
+          <label class="form-label">Steam ID or Profile URL name</label>
+          <input type="text" class="form-input" id="verifySteamId" placeholder="76561198... or vanity name" />
+          <p style="font-size:0.75rem;color:var(--text-3);margin-top:0.25rem">Enter your Steam64 ID or the custom URL name from your Steam profile.</p>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeAllModals()">Cancel</button>
+      <button class="btn btn-success" onclick="submitVerifyAccount()" id="verifySubmitBtn">✓ Verify</button>
     </div>
   </div>
 

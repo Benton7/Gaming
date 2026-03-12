@@ -194,15 +194,31 @@ db.exec(`
     FOREIGN KEY (challenger_team_id) REFERENCES teams(id) ON DELETE CASCADE,
     FOREIGN KEY (challenged_team_id) REFERENCES teams(id)
   );
+
+  CREATE TABLE IF NOT EXISTS friends (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    requester_id INTEGER NOT NULL,
+    addressee_id INTEGER NOT NULL,
+    status TEXT DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (requester_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (addressee_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(requester_id, addressee_id)
+  );
 `);
 
 // ===== MIGRATIONS =====
 const userCols = db.pragma('table_info(users)').map(c => c.name);
 if (!userCols.includes('bio')) db.exec("ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ''");
 if (!userCols.includes('banner_color')) db.exec("ALTER TABLE users ADD COLUMN banner_color TEXT DEFAULT '#6366f1'");
+if (!userCols.includes('avatar_url')) db.exec("ALTER TABLE users ADD COLUMN avatar_url TEXT");
+if (!userCols.includes('social_links')) db.exec("ALTER TABLE users ADD COLUMN social_links TEXT DEFAULT '{}'");
+if (!userCols.includes('title')) db.exec("ALTER TABLE users ADD COLUMN title TEXT");
 
 const acctCols = db.pragma('table_info(connected_accounts)').map(c => c.name);
 if (!acctCols.includes('tracker_url')) db.exec('ALTER TABLE connected_accounts ADD COLUMN tracker_url TEXT');
+if (!acctCols.includes('verified')) db.exec('ALTER TABLE connected_accounts ADD COLUMN verified INTEGER DEFAULT 0');
+if (!acctCols.includes('verified_at')) db.exec('ALTER TABLE connected_accounts ADD COLUMN verified_at DATETIME');
 
 const clubCols = db.pragma('table_info(clubs)').map(c => c.name);
 if (!clubCols.includes('club_color')) db.exec("ALTER TABLE clubs ADD COLUMN club_color TEXT DEFAULT '#6366f1'");
