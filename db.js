@@ -609,6 +609,132 @@ const allGames = [
       { name: 'Diamond', value: 6, color: '#818cf8' },
       { name: 'Master', value: 7, color: '#fbbf24' }
     ])
+  },
+  // ── Sports games ──────────────────────────────────────────
+  {
+    name: 'Madden NFL 25', slug: 'madden-25', icon: '🏈', color: '#22c55e', team_size: 1, bench_size: 0,
+    ranks: JSON.stringify([
+      { name: 'Division X', value: 1, color: '#78716c' },
+      { name: 'Division IX', value: 2, color: '#78716c' },
+      { name: 'Division VIII', value: 3, color: '#9ca3af' },
+      { name: 'Division VII', value: 4, color: '#9ca3af' },
+      { name: 'Division VI', value: 5, color: '#b45309' },
+      { name: 'Division V', value: 6, color: '#b45309' },
+      { name: 'Division IV', value: 7, color: '#d97706' },
+      { name: 'Division III', value: 8, color: '#d97706' },
+      { name: 'Division II', value: 9, color: '#0ea5e9' },
+      { name: 'Division I', value: 10, color: '#818cf8' },
+      { name: 'Champion', value: 11, color: '#fbbf24' },
+      { name: 'Legend', value: 12, color: '#ef4444' }
+    ])
+  },
+  {
+    name: 'NBA 2K25', slug: 'nba-2k25', icon: '🏀', color: '#f97316', team_size: 1, bench_size: 0,
+    ranks: JSON.stringify([
+      { name: 'Rookie I', value: 1, color: '#78716c' },
+      { name: 'Rookie II', value: 2, color: '#78716c' },
+      { name: 'Rookie III', value: 3, color: '#78716c' },
+      { name: 'Pro I', value: 4, color: '#9ca3af' },
+      { name: 'Pro II', value: 5, color: '#9ca3af' },
+      { name: 'Pro III', value: 6, color: '#9ca3af' },
+      { name: 'All-Star I', value: 7, color: '#d97706' },
+      { name: 'All-Star II', value: 8, color: '#d97706' },
+      { name: 'All-Star III', value: 9, color: '#d97706' },
+      { name: 'Superstar I', value: 10, color: '#0ea5e9' },
+      { name: 'Superstar II', value: 11, color: '#0ea5e9' },
+      { name: 'Superstar III', value: 12, color: '#0ea5e9' },
+      { name: 'Hall of Fame I', value: 13, color: '#818cf8' },
+      { name: 'Hall of Fame II', value: 14, color: '#818cf8' },
+      { name: 'Hall of Fame III', value: 15, color: '#818cf8' },
+      { name: 'Legend', value: 16, color: '#fbbf24' }
+    ])
+  },
+  {
+    name: 'EA FC 25', slug: 'ea-fc-25', icon: '⚽', color: '#3b82f6', team_size: 1, bench_size: 0,
+    ranks: JSON.stringify([
+      { name: 'Division 10', value: 1, color: '#78716c' },
+      { name: 'Division 9', value: 2, color: '#78716c' },
+      { name: 'Division 8', value: 3, color: '#9ca3af' },
+      { name: 'Division 7', value: 4, color: '#9ca3af' },
+      { name: 'Division 6', value: 5, color: '#b45309' },
+      { name: 'Division 5', value: 6, color: '#d97706' },
+      { name: 'Division 4', value: 7, color: '#d97706' },
+      { name: 'Division 3', value: 8, color: '#0ea5e9' },
+      { name: 'Division 2', value: 9, color: '#818cf8' },
+      { name: 'Division 1', value: 10, color: '#ef4444' },
+      { name: 'Elite', value: 11, color: '#fbbf24' }
+    ])
+  },
+  {
+    name: 'MLB The Show 25', slug: 'mlb-the-show-25', icon: '⚾', color: '#dc2626', team_size: 1, bench_size: 0,
+    ranks: JSON.stringify([
+      { name: 'Bronze 1', value: 1, color: '#b45309' },
+      { name: 'Bronze 2', value: 2, color: '#b45309' },
+      { name: 'Bronze 3', value: 3, color: '#b45309' },
+      { name: 'Silver 1', value: 4, color: '#9ca3af' },
+      { name: 'Silver 2', value: 5, color: '#9ca3af' },
+      { name: 'Silver 3', value: 6, color: '#9ca3af' },
+      { name: 'Gold 1', value: 7, color: '#d97706' },
+      { name: 'Gold 2', value: 8, color: '#d97706' },
+      { name: 'Gold 3', value: 9, color: '#d97706' },
+      { name: 'Diamond 1', value: 10, color: '#818cf8' },
+      { name: 'Diamond 2', value: 11, color: '#818cf8' },
+      { name: 'Diamond 3', value: 12, color: '#818cf8' },
+      { name: 'The Show', value: 13, color: '#fbbf24' }
+    ])
+  },
+  {
+    name: 'NHL 25', slug: 'nhl-25', icon: '🏒', color: '#0ea5e9', team_size: 1, bench_size: 0,
+    ranks: JSON.stringify([
+      { name: 'Division X', value: 1, color: '#78716c' },
+      { name: 'Division IX', value: 2, color: '#78716c' },
+      { name: 'Division VIII', value: 3, color: '#9ca3af' },
+      { name: 'Division VII', value: 4, color: '#9ca3af' },
+      { name: 'Division VI', value: 5, color: '#b45309' },
+      { name: 'Division V', value: 6, color: '#b45309' },
+      { name: 'Division IV', value: 7, color: '#d97706' },
+      { name: 'Division III', value: 8, color: '#d97706' },
+      { name: 'Division II', value: 9, color: '#0ea5e9' },
+      { name: 'Division I', value: 10, color: '#818cf8' },
+      { name: 'Champion', value: 11, color: '#fbbf24' }
+    ])
+  },
+  {
+    name: 'UFC 5', slug: 'ufc-5', icon: '🥋', color: '#ef4444', team_size: 1, bench_size: 0,
+    ranks: JSON.stringify([
+      { name: 'Prospect', value: 1, color: '#78716c' },
+      { name: 'Contender', value: 2, color: '#9ca3af' },
+      { name: 'Ranked #15', value: 3, color: '#b45309' },
+      { name: 'Ranked #10', value: 4, color: '#b45309' },
+      { name: 'Ranked #5', value: 5, color: '#d97706' },
+      { name: 'Ranked #1', value: 6, color: '#d97706' },
+      { name: 'Interim Champion', value: 7, color: '#0ea5e9' },
+      { name: 'Champion', value: 8, color: '#fbbf24' },
+      { name: 'GOAT', value: 9, color: '#ef4444' }
+    ])
+  },
+  {
+    name: 'PGA Tour 2K25', slug: 'pga-tour-2k25', icon: '⛳', color: '#16a34a', team_size: 1, bench_size: 0,
+    ranks: JSON.stringify([
+      { name: 'Amateur', value: 1, color: '#78716c' },
+      { name: 'Club Pro', value: 2, color: '#9ca3af' },
+      { name: 'Tour Card', value: 3, color: '#b45309' },
+      { name: 'Rising Star', value: 4, color: '#d97706' },
+      { name: 'Tour Winner', value: 5, color: '#0ea5e9' },
+      { name: 'Major Champion', value: 6, color: '#818cf8' },
+      { name: 'World #1', value: 7, color: '#fbbf24' }
+    ])
+  },
+  {
+    name: 'WWE 2K25', slug: 'wwe-2k25', icon: '🤼', color: '#fbbf24', team_size: 1, bench_size: 0,
+    ranks: JSON.stringify([
+      { name: 'Jobber', value: 1, color: '#78716c' },
+      { name: 'Midcarder', value: 2, color: '#9ca3af' },
+      { name: 'Upper Midcarder', value: 3, color: '#b45309' },
+      { name: 'Main Eventer', value: 4, color: '#d97706' },
+      { name: 'Champion', value: 5, color: '#0ea5e9' },
+      { name: 'Legend', value: 6, color: '#fbbf24' }
+    ])
   }
 ];
 

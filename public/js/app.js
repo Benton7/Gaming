@@ -1008,21 +1008,44 @@ function selectColor(color, el, type) {
 async function handleAvatarUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
-  if (file.size > 4 * 1024 * 1024) { showToast('Image must be under 4MB', 'error'); return; }
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    const dataUrl = e.target.result;
-    try {
-      await api.users.uploadAvatar({ avatar_url: dataUrl });
-      currentUser = await api.users.me();
-      setAvatar('profileAvatar', currentUser.gamertag || currentUser.username, currentUser.avatar_color, dataUrl);
-      setAvatar('navAvatar', currentUser.gamertag || currentUser.username, currentUser.avatar_color, dataUrl);
-      showToast('Profile photo updated!', 'success');
-    } catch (err) {
-      showToast(err.message, 'error');
-    }
-  };
-  reader.readAsDataURL(file);
+  if (!file.type.startsWith('image/')) { showToast('Please select an image file.', 'error'); return; }
+
+  try {
+    const dataUrl = await resizeImageToDataUrl(file, 800, 800, 0.85);
+    await api.users.uploadAvatar({ avatar_url: dataUrl });
+    currentUser = await api.users.me();
+    setAvatar('profileAvatar', currentUser.gamertag || currentUser.username, currentUser.avatar_color, dataUrl);
+    setAvatar('navAvatar', currentUser.gamertag || currentUser.username, currentUser.avatar_color, dataUrl);
+    showToast('Profile photo updated!', 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+function resizeImageToDataUrl(file, maxW, maxH, quality) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Invalid image file'));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxW || height > maxH) {
+          const ratio = Math.min(maxW / width, maxH / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 async function saveProfile() {

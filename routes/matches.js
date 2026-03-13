@@ -237,6 +237,26 @@ function _resolveMatch(match, aWins, bWins) {
     db.prepare('UPDATE clubs SET club_score = club_score + ?, wins = wins + 1 WHERE id = ?').run(scoreAwarded, winnerId);
     if (loserId) db.prepare('UPDATE clubs SET losses = losses + 1 WHERE id = ?').run(loserId);
   }
+
+  // Close any linked club challenge
+  const clubChallenge = db.prepare('SELECT * FROM club_challenges WHERE match_id = ?').get(match.id);
+  if (clubChallenge) {
+    db.prepare(`
+      UPDATE club_challenges
+      SET status = 'completed', winner_id = ?, resolved_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(winnerId || null, clubChallenge.id);
+  }
+
+  // Close any linked open challenge
+  const openChallenge = db.prepare('SELECT * FROM open_challenges WHERE match_id = ?').get(match.id);
+  if (openChallenge) {
+    db.prepare(`
+      UPDATE open_challenges
+      SET status = 'completed', winner_id = ?, resolved_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(winnerId || null, openChallenge.id);
+  }
 }
 
 module.exports = router;
