@@ -134,16 +134,23 @@ a:hover { color: var(--accent-hover); }
   height: 100%;
   display: flex; align-items: center; gap: 2rem;
 }
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+}
+
 .brand-icon {
-  height: 5px !important;
-  width: 5px !important;
-  border: 2px solid red !important;
+  display: block;
+  height: 30px;
+  width: auto;
 }
 
 .brand-text-img {
-  height: 5px !important;
-  width: 5px !important;
-  border: 2px solid lime !important;
+  display: block;
+  height: 20px;
+  width: auto;
 }
 
 .nav-brand:hover { color: var(--accent-hover) !important; }
