@@ -35,7 +35,8 @@ const routes = {
 };
 
 function route() {
-  const hash = location.hash.slice(1) || '/';
+  const full = location.hash.slice(1) || '/';
+  const hash = full.split('?')[0];
   const page = routes[hash] || 'landing';
 
   if (!currentUser && !['landing','login','register'].includes(page)) {
@@ -98,6 +99,7 @@ async function loadPage(page) {
     case 'leaderboard': await loadLeaderboard(); break;
     case 'profile': await loadProfile(); break;
     case 'teams': await loadTeamsPage(); break;
+    case 'match': await loadMatchPage(); break;
   }
 }
 
@@ -628,14 +630,17 @@ async function kickMember(clubId, userId) {
 async function respondChallenge(challengeId, action) {
   try {
     const res = await api.clubs.respond(challengeId, { action });
-    if (action === 'accept') {
-      const msg = res.winner ? `Challenge resolved! Winner: [${res.winner.tag}] ${res.winner.name} (+${res.score_awarded} pts)` : 'Challenge resolved!';
-      showToast(msg, 'success');
+    if (action === 'accept' && res.match_id) {
+      showToast('Challenge accepted! Opening match room...', 'success');
+      location.hash = `#/match?id=${res.match_id}`;
+    } else if (action === 'accept') {
+      showToast('Challenge accepted!', 'success');
+      currentUser = await api.users.me();
+      await loadClubs();
     } else {
       showToast('Challenge declined.', 'success');
+      await loadClubs();
     }
-    currentUser = await api.users.me();
-    await loadClubs();
   } catch (err) {
     showToast(err.message, 'error');
   }
@@ -1616,10 +1621,14 @@ async function submitAcceptOpenChallenge() {
   try {
     const res = await api.clubs.acceptOpenChallenge(acceptingOpenChallengeId, { participant_ids: memberIds });
     closeAllModals();
-    const msg = res.winner ? `Challenge complete! Winner: [${res.winner.tag}] ${res.winner.name} (+${res.score_awarded} pts)` : 'Challenge complete!';
-    showToast(msg, 'success');
-    currentUser = await api.users.me();
-    await loadClubs();
+    if (res.match_id) {
+      showToast('Challenge accepted! Opening match room...', 'success');
+      location.hash = `#/match?id=${res.match_id}`;
+    } else {
+      showToast('Challenge accepted!', 'success');
+      currentUser = await api.users.me();
+      await loadClubs();
+    }
   } catch (err) {
     showError('acceptOpenChallengeError', err.message);
   }
@@ -2021,4 +2030,243 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+// ===== MATCH PAGE =====
+let _matchPollTimer = null;
+let _matchLastMsgTime = null;
+
+async function loadMatchPage() {
+  const params = new URLSearchParams(location.hash.split('?')[1] || '');
+  const matchId = params.get('id');
+  const el = document.getElementById('matchPageContent');
+  if (!matchId) {
+    el.innerHTML = '<p class="text-muted" style="padding:2rem">No match ID specified.</p>';
+    return;
+  }
+  clearInterval(_matchPollTimer);
+  el.innerHTML = '<p class="text-muted" style="padding:2rem">Loading match...</p>';
+  try {
+    const match = await api.matches.get(matchId);
+    _matchLastMsgTime = match.messages?.length ? match.messages[match.messages.length - 1].created_at : null;
+    renderMatch(match);
+    _matchPollTimer = setInterval(() => pollMatchMessages(matchId), 5000);
+  } catch (err) {
+    el.innerHTML = `<p class="text-muted" style="padding:2rem">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function renderMatch(match) {
+  const el = document.getElementById('matchPageContent');
+  const isA = match.participant_a_ids.includes(currentUser.id);
+  const isB = match.participant_b_ids.includes(currentUser.id);
+  const myTeam = isA ? 'a' : 'b';
+
+  const statusLabel = { active: 'In Progress', disputed: 'Disputed', completed: 'Completed' }[match.status] || match.status;
+  const statusColor = { active: '#10b981', disputed: '#f59e0b', completed: '#6366f1' }[match.status] || '#888';
+
+  const gameIcons = match.games.map(g => `<span title="${escapeHtml(g.name)}" style="font-size:1.25rem">${escapeHtml(g.icon || g.name[0])}</span>`).join(' ');
+
+  function renderTeam(participants, label) {
+    return `<div class="match-team" style="flex:1;min-width:220px">
+      <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:#888;margin-bottom:0.5rem">${label}</div>
+      ${participants.map(p => {
+        const initials = (p.gamertag || p.username || '?')[0].toUpperCase();
+        const accountLines = match.games.map(g => {
+          const acct = p.accounts.find(a => a.game_id === g.id);
+          return acct
+            ? `<div style="font-size:0.75rem;color:#a0a0b0;margin-left:1.75rem">${escapeHtml(g.icon || '')} <span style="color:#d0d0e0">${escapeHtml(acct.platform_username)}</span></div>`
+            : `<div style="font-size:0.75rem;color:#555;margin-left:1.75rem">${escapeHtml(g.icon || '')} not connected</div>`;
+        }).join('');
+        return `<div style="margin-bottom:0.75rem">
+          <div style="display:flex;align-items:center;gap:0.5rem">
+            <div style="width:1.5rem;height:1.5rem;border-radius:50%;background:${escapeHtml(p.avatar_color||'#6366f1')};display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;color:#fff;flex-shrink:0">${initials}</div>
+            <span style="font-weight:600;color:#e0e0f0">${escapeHtml(p.gamertag || p.username)}</span>
+          </div>
+          ${accountLines}
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  // Score reporting section
+  let scoreSection = '';
+  if (match.status === 'active' || match.status === 'disputed') {
+    const myReported = isA ? match.reported_by_a : match.reported_by_b;
+    const oppReported = isA ? match.reported_by_b : match.reported_by_a;
+    const myScore = isA ? match.report_a_wins : match.report_b_wins;
+    const oppScore = isA ? match.report_b_wins : match.report_a_wins;
+
+    scoreSection = `<div class="card" style="margin-top:1.5rem;padding:1.25rem">
+      <div style="font-size:1rem;font-weight:700;margin-bottom:1rem;color:#e0e0f0">Report Score</div>
+      ${myReported
+        ? `<p style="color:#a0a0b0;font-size:0.875rem">You reported: <strong style="color:#10b981">${myScore} wins</strong> for your team.
+           ${oppReported ? `Opponent reported: <strong style="color:${match.report_a_wins === match.report_b_wins ? '#10b981' : '#ef4444'}">${oppScore} wins</strong>.` : 'Waiting for opponent to report.'}</p>`
+        : `<div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
+             <label style="color:#a0a0b0;font-size:0.875rem">My team won:</label>
+             <input id="matchWinsInput" type="number" min="0" max="99" placeholder="Rounds won" style="width:120px;padding:0.4rem 0.6rem;background:#1a1a2e;border:1px solid #333;border-radius:6px;color:#e0e0f0;font-size:0.875rem" />
+             <button class="btn btn-primary btn-sm" onclick="submitMatchReport(${match.id})">Submit Score</button>
+           </div>`
+      }
+      ${match.status === 'disputed' ? `<div style="margin-top:1rem;padding:0.75rem;background:#2a1a0e;border:1px solid #7c3a0e;border-radius:8px;color:#fbbf24;font-size:0.875rem">
+        Scores are disputed.${match.dispute_reason ? ` Reason: ${escapeHtml(match.dispute_reason)}` : ''}<br>
+        <button class="btn btn-sm" style="margin-top:0.5rem;background:#7c3a0e;color:#fbbf24;border:none" onclick="openDisputeModal(${match.id})">Attach Proof / Update Dispute</button>
+        ${myReported && oppReported ? `<button class="btn btn-sm" style="margin-top:0.5rem;margin-left:0.5rem;background:#1a3a2e;color:#10b981;border:1px solid #10b981" onclick="confirmMatchScore(${match.id})">Accept Opponent's Score</button>` : ''}
+      </div>` : ''}
+    </div>`;
+  } else if (match.status === 'completed') {
+    const winnerIsA = match.winner_entity_id === match.entity_a_id;
+    scoreSection = `<div class="card" style="margin-top:1.5rem;padding:1.25rem;text-align:center">
+      <div style="font-size:1.5rem;font-weight:800;color:#10b981;margin-bottom:0.5rem">Match Complete</div>
+      <div style="font-size:1.1rem;color:#e0e0f0">${escapeHtml(match.score_a ?? 0)} — ${escapeHtml(match.score_b ?? 0)}</div>
+      <div style="font-size:0.875rem;color:#a0a0b0;margin-top:0.25rem">
+        ${winnerIsA ? 'Team A wins' : 'Team B wins'}${match.score_awarded ? ` · +${match.score_awarded} pts` : ''}
+      </div>
+    </div>`;
+  }
+
+  // Chat
+  const chatHtml = `<div class="card" style="margin-top:1.5rem;padding:1.25rem">
+    <div style="font-size:0.9rem;font-weight:700;margin-bottom:0.75rem;color:#e0e0f0">Match Chat</div>
+    <div id="matchChatMessages" style="max-height:260px;overflow-y:auto;margin-bottom:0.75rem;display:flex;flex-direction:column;gap:0.4rem">
+      ${renderChatMessages(match.messages || [])}
+    </div>
+    ${match.status !== 'completed' ? `<div style="display:flex;gap:0.5rem">
+      <input id="matchChatInput" type="text" placeholder="Send a message..." maxlength="500"
+        style="flex:1;padding:0.4rem 0.7rem;background:#1a1a2e;border:1px solid #333;border-radius:6px;color:#e0e0f0;font-size:0.875rem"
+        onkeydown="if(event.key==='Enter')sendMatchChat(${match.id})" />
+      <button class="btn btn-ghost btn-sm" onclick="sendMatchChat(${match.id})">Send</button>
+    </div>` : ''}
+  </div>`;
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-bottom:1.5rem">
+      <div>
+        <div style="font-size:0.75rem;color:#888;margin-bottom:0.25rem">Match #${match.id}</div>
+        <h2 style="margin:0;font-size:1.5rem;font-weight:800;color:#e0e0f0">Active Match</h2>
+        <div style="font-size:0.875rem;color:#a0a0b0;margin-top:0.25rem">Games: ${gameIcons}</div>
+      </div>
+      <span style="padding:0.35rem 0.9rem;border-radius:9999px;font-size:0.8rem;font-weight:700;background:${statusColor}22;color:${statusColor};border:1px solid ${statusColor}55">${statusLabel}</span>
+    </div>
+
+    <div class="card" style="padding:1.25rem">
+      <div style="display:flex;gap:2rem;flex-wrap:wrap">
+        ${renderTeam(match.participants_a, 'Team A')}
+        <div style="display:flex;align-items:center;font-size:1.5rem;font-weight:800;color:#555;padding:0 0.5rem">vs</div>
+        ${renderTeam(match.participants_b, 'Team B')}
+      </div>
+    </div>
+
+    ${scoreSection}
+    ${chatHtml}
+
+    <!-- Dispute Modal -->
+    <div id="disputeModalInline" style="display:none;margin-top:1rem;padding:1.25rem;background:#1a1a2e;border:1px solid #333;border-radius:12px">
+      <div style="font-weight:700;color:#e0e0f0;margin-bottom:0.75rem">File / Update Dispute</div>
+      <textarea id="disputeReason" placeholder="Describe the issue..." rows="3"
+        style="width:100%;padding:0.5rem;background:#0e0e1a;border:1px solid #333;border-radius:6px;color:#e0e0f0;font-size:0.875rem;resize:vertical;margin-bottom:0.5rem"></textarea>
+      <input id="disputeEvidence" type="url" placeholder="Evidence URL (screenshot, video, etc.) — optional"
+        style="width:100%;padding:0.4rem 0.6rem;background:#0e0e1a;border:1px solid #333;border-radius:6px;color:#e0e0f0;font-size:0.875rem;margin-bottom:0.75rem" />
+      <div style="display:flex;gap:0.5rem">
+        <button class="btn btn-sm" style="background:#7c0e1a;color:#fca5a5;border:none" onclick="submitDispute(${match.id})">Submit Dispute</button>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('disputeModalInline').style.display='none'">Cancel</button>
+      </div>
+      <div id="disputeError" class="error-msg" style="display:none;margin-top:0.5rem"></div>
+    </div>
+  `;
+
+  scrollChatToBottom();
+}
+
+function renderChatMessages(messages) {
+  if (!messages.length) return '<p style="color:#555;font-size:0.8rem;text-align:center">No messages yet.</p>';
+  return messages.map(m => {
+    const isMe = m.user_id === currentUser.id;
+    const initials = (m.gamertag || m.username || '?')[0].toUpperCase();
+    return `<div style="display:flex;align-items:flex-start;gap:0.5rem;${isMe ? 'flex-direction:row-reverse' : ''}">
+      <div style="width:1.5rem;height:1.5rem;border-radius:50%;background:${escapeHtml(m.avatar_color||'#6366f1')};display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:700;color:#fff;flex-shrink:0">${initials}</div>
+      <div style="max-width:70%;padding:0.35rem 0.65rem;border-radius:10px;background:${isMe ? '#2d2d6e' : '#1e1e35'};color:#e0e0f0;font-size:0.825rem">${escapeHtml(m.message)}</div>
+    </div>`;
+  }).join('');
+}
+
+function scrollChatToBottom() {
+  const c = document.getElementById('matchChatMessages');
+  if (c) c.scrollTop = c.scrollHeight;
+}
+
+async function pollMatchMessages(matchId) {
+  try {
+    const msgs = await api.matches.getMessages(matchId, _matchLastMsgTime);
+    if (!msgs.length) return;
+    _matchLastMsgTime = msgs[msgs.length - 1].created_at;
+    const c = document.getElementById('matchChatMessages');
+    if (!c) return;
+    const atBottom = c.scrollHeight - c.scrollTop <= c.clientHeight + 10;
+    c.insertAdjacentHTML('beforeend', renderChatMessages(msgs));
+    if (atBottom) scrollChatToBottom();
+  } catch {}
+}
+
+async function submitMatchReport(matchId) {
+  const input = document.getElementById('matchWinsInput');
+  const wins = parseInt(input?.value);
+  if (isNaN(wins) || wins < 0) { showToast('Enter a valid number of wins.', 'error'); return; }
+  try {
+    const res = await api.matches.report(matchId, { rounds_won: wins });
+    showToast(res.message || 'Score reported!', res.status === 'disputed' ? 'error' : 'success');
+    const match = await api.matches.get(matchId);
+    renderMatch(match);
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function confirmMatchScore(matchId) {
+  try {
+    const res = await api.matches.confirm(matchId);
+    showToast(res.message || 'Score confirmed!', 'success');
+    const match = await api.matches.get(matchId);
+    renderMatch(match);
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+function openDisputeModal(matchId) {
+  document.getElementById('disputeModalInline').style.display = '';
+}
+
+async function submitDispute(matchId) {
+  const reason = document.getElementById('disputeReason').value.trim();
+  const evidence_url = document.getElementById('disputeEvidence').value.trim();
+  if (!reason) { showError('disputeError', 'Please provide a reason.'); return; }
+  hideError('disputeError');
+  try {
+    const res = await api.matches.dispute(matchId, { reason, evidence_url: evidence_url || undefined });
+    showToast(res.message || 'Dispute submitted.', 'success');
+    document.getElementById('disputeModalInline').style.display = 'none';
+    const match = await api.matches.get(matchId);
+    renderMatch(match);
+  } catch (err) {
+    showError('disputeError', err.message);
+  }
+}
+
+async function sendMatchChat(matchId) {
+  const input = document.getElementById('matchChatInput');
+  const message = input?.value.trim();
+  if (!message) return;
+  input.value = '';
+  try {
+    const msg = await api.matches.sendMessage(matchId, { message });
+    _matchLastMsgTime = msg.created_at;
+    const c = document.getElementById('matchChatMessages');
+    if (c) {
+      c.insertAdjacentHTML('beforeend', renderChatMessages([msg]));
+      scrollChatToBottom();
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
 }
