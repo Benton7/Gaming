@@ -303,7 +303,8 @@ async function loadGames() {
   grid.innerHTML = allGames.map(game => {
     const acct = connected[game.id];
     const style = `--game-color: ${game.color}`;
-    const hasApi = !!(verifySupport[game.slug]?.available);
+    const gameSupport = verifySupport[game.slug];
+    const hasApi = !!(gameSupport?.available && gameSupport?.method !== 'manual');
 
     if (acct) {
       const trackerBadge = acct.tracker_url
@@ -349,7 +350,7 @@ async function loadGames() {
           <span class="game-big-icon">${game.icon}</span>
           <div>
             <div class="game-card-name">${game.name}</div>
-            <div class="game-card-disconnected">${hasApi ? '⚡ tracker.gg rank lookup' : 'Not connected'}</div>
+            <div class="game-card-disconnected">Not connected</div>
           </div>
         </div>
         <div class="game-card-actions">
@@ -832,12 +833,10 @@ function renderProfileGames(accounts) {
   }
   // accounts already sorted best → worst by backend
   el.innerHTML = accounts.map((a, i) => {
-    const verifiedBadge = a.verified
-      ? `<span class="verified-badge" title="Verified via API">✓ Verified</span>`
-      : `<button class="btn-verify" onclick="openVerifyModal(${a.id}, '${a.slug}')">Verify</button>`;
     const trackerBadge = a.tracker_url
       ? `<a href="${escapeHtml(a.tracker_url)}" target="_blank" rel="noopener" class="tracker-badge">🔗 Linked</a>`
       : '';
+    const updateBtn = `<button class="btn btn-ghost btn-sm" style="font-size:0.75rem" onclick="openUpdateRank(${a.id}, ${JSON.stringify(a.ranks).replace(/"/g, '&quot;')}, ${a.current_rank_index}, ${a.peak_rank_index}, ${JSON.stringify(a.tracker_url || '').replace(/"/g, '&quot;')})">Update</button>`;
     return `
     <div class="profile-game-row">
       <div class="profile-game-rank-num">#${i + 1}</div>
@@ -845,7 +844,6 @@ function renderProfileGames(accounts) {
       <div class="profile-game-info">
         <div class="profile-game-name">${escapeHtml(a.game_name)}
           <span class="game-platform-small">${a.platform}</span>
-          ${a.verified ? '<span class="verified-badge-inline">✓</span>' : ''}
         </div>
         <div class="profile-game-user">@${escapeHtml(a.platform_username)}</div>
       </div>
@@ -855,7 +853,7 @@ function renderProfileGames(accounts) {
       </div>
       <div class="profile-game-actions">
         ${trackerBadge}
-        ${verifiedBadge}
+        ${updateBtn}
       </div>
     </div>`;
   }).join('');
@@ -992,11 +990,22 @@ async function saveProfile() {
 }
 
 // ===== FRIENDS =====
-function openAddFriendModal() {
+let _friendStatusCache = null; // { friendIds: Set, sentIds: Set, receivedMap: Map<userId, requestId> }
+
+async function openAddFriendModal() {
   document.getElementById('friendSearchInput').value = '';
   document.getElementById('friendSearchResults').innerHTML = '';
   hideError('addFriendError');
   document.getElementById('addFriendSuccess').style.display = 'none';
+  _friendStatusCache = null;
+  // Pre-load friendship statuses so search results show correct state
+  try {
+    const [friends, requests] = await Promise.all([api.friends.list(), api.friends.requests()]);
+    const friendIds = new Set(friends.map(f => f.id));
+    const sentIds = new Set(); // we don't have a "sent" list endpoint, populated on demand
+    const receivedMap = new Map(requests.map(r => [r.user_id, r.id]));
+    _friendStatusCache = { friendIds, sentIds, receivedMap };
+  } catch { _friendStatusCache = { friendIds: new Set(), sentIds: new Set(), receivedMap: new Map() }; }
   openModal('addFriendModal');
 }
 
@@ -1009,16 +1018,29 @@ async function searchFriendUsers(q) {
     try {
       const users = await api.users.search(q);
       if (!users.length) { el.innerHTML = '<p class="text-muted" style="font-size:0.82rem;padding:0.5rem 0">No users found.</p>'; return; }
-      el.innerHTML = users.map(u => `
+      const cache = _friendStatusCache || { friendIds: new Set(), sentIds: new Set(), receivedMap: new Map() };
+      el.innerHTML = users.map(u => {
+        let actionBtn;
+        if (cache.friendIds.has(u.id)) {
+          actionBtn = `<span class="btn btn-ghost btn-sm" style="opacity:0.6;cursor:default">Friends ✓</span>`;
+        } else if (cache.receivedMap.has(u.id)) {
+          const reqId = cache.receivedMap.get(u.id);
+          actionBtn = `<button class="btn btn-success btn-sm" onclick="acceptFromSearch(${reqId}, ${u.id}, this)">Accept</button>`;
+        } else if (cache.sentIds.has(u.id)) {
+          actionBtn = `<span class="btn btn-ghost btn-sm" style="opacity:0.6;cursor:default">Sent ✓</span>`;
+        } else {
+          actionBtn = `<button class="btn btn-primary btn-sm" onclick="sendFriendRequest(${u.id}, this)">Add</button>`;
+        }
+        return `
         <div class="friend-search-row">
           <div class="avatar-sm" style="background:${u.avatar_color || '#6366f1'}">${(u.gamertag || u.username)[0].toUpperCase()}</div>
           <div class="friend-info" style="flex:1">
             <div class="friend-name">${escapeHtml(u.gamertag || u.username)}</div>
             <div class="friend-gs mono">${formatScore(u.gamerscore)} GS</div>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="sendFriendRequest(${u.id}, this)">Add</button>
-        </div>
-      `).join('');
+          ${actionBtn}
+        </div>`;
+      }).join('');
     } catch { el.innerHTML = '<p class="text-muted" style="font-size:0.82rem">Search failed.</p>'; }
   }, 350);
 }
@@ -1028,12 +1050,32 @@ async function sendFriendRequest(userId, btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
   try {
     await api.friends.sendRequest(userId);
-    if (btn) { btn.textContent = 'Sent ✓'; btn.className = 'btn btn-ghost btn-sm'; }
+    if (btn) { btn.textContent = 'Sent ✓'; btn.className = 'btn btn-ghost btn-sm'; btn.style.opacity = '0.6'; btn.style.cursor = 'default'; btn.disabled = true; }
+    if (_friendStatusCache) _friendStatusCache.sentIds.add(userId);
     document.getElementById('addFriendSuccess').style.display = '';
     document.getElementById('addFriendSuccess').textContent = 'Friend request sent!';
     setTimeout(() => { document.getElementById('addFriendSuccess').style.display = 'none'; }, 3000);
   } catch (err) {
     if (btn) { btn.disabled = false; btn.textContent = 'Add'; }
+    showError('addFriendError', err.message);
+  }
+}
+
+async function acceptFromSearch(requestId, userId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Accepting...'; }
+  try {
+    await api.friends.accept(requestId);
+    if (btn) { btn.outerHTML = `<span class="btn btn-ghost btn-sm" style="opacity:0.6;cursor:default">Friends ✓</span>`; }
+    if (_friendStatusCache) {
+      _friendStatusCache.friendIds.add(userId);
+      _friendStatusCache.receivedMap.delete(userId);
+    }
+    currentUser = await api.users.me();
+    updateNavUser();
+    loadProfileFriends();
+    showToast('Friend added!', 'success');
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Accept'; }
     showError('addFriendError', err.message);
   }
 }
