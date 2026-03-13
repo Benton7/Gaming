@@ -1,5 +1,5 @@
 const express = require('express');
-const { db } = require('../db');
+const { db, updateEloForMatch } = require('../db');
 const { authenticate } = require('./middleware');
 
 const router = express.Router();
@@ -36,6 +36,29 @@ function enrichMatch(match) {
 
   return { ...match, games, participants_a, participants_b, participant_a_ids, participant_b_ids, game_ids };
 }
+
+// Get active/disputed matches for the current user
+router.get('/mine', authenticate, (req, res) => {
+  const all = db.prepare(`
+    SELECT * FROM matches
+    WHERE status IN ('active', 'disputed')
+    ORDER BY created_at DESC
+  `).all();
+
+  const mine = all.filter(m => {
+    let pA = [], pB = [];
+    try { pA = JSON.parse(m.participant_a_ids); } catch {}
+    try { pB = JSON.parse(m.participant_b_ids); } catch {}
+    return [...pA, ...pB].includes(req.userId);
+  });
+
+  res.json(mine.map(m => {
+    let game_ids = [];
+    try { game_ids = JSON.parse(m.game_ids); } catch {}
+    const games = game_ids.map(gid => db.prepare('SELECT id, name, icon, slug FROM games WHERE id = ?').get(gid)).filter(Boolean);
+    return { ...m, games };
+  }));
+});
 
 // Get a match by ID
 router.get('/:id', authenticate, (req, res) => {
@@ -211,8 +234,36 @@ function _resolveMatch(match, aWins, bWins) {
   `).run(aWins, bWins, winnerId, scoreAwarded, match.id);
 
   if (winnerId) {
-    db.prepare('UPDATE clubs SET club_score = club_score + ?, wins = wins + 1 WHERE id = ?').run(scoreAwarded, winnerId);
-    if (loserId) db.prepare('UPDATE clubs SET losses = losses + 1 WHERE id = ?').run(loserId);
+    if (match.match_type === 'club') {
+      db.prepare('UPDATE clubs SET club_score = club_score + ?, wins = wins + 1 WHERE id = ?').run(scoreAwarded, winnerId);
+      if (loserId) db.prepare('UPDATE clubs SET losses = losses + 1 WHERE id = ?').run(loserId);
+    } else if (match.match_type === 'team') {
+      db.prepare('UPDATE teams SET wins = wins + 1 WHERE id = ?').run(winnerId);
+      if (loserId) db.prepare('UPDATE teams SET losses = losses + 1 WHERE id = ?').run(loserId);
+    }
+  }
+
+  // Update ELO for all participants and entities
+  updateEloForMatch(match, winnerId);
+
+  // Close any linked club challenge
+  const clubChallenge = db.prepare('SELECT * FROM club_challenges WHERE match_id = ?').get(match.id);
+  if (clubChallenge) {
+    db.prepare(`
+      UPDATE club_challenges
+      SET status = 'completed', winner_id = ?, resolved_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(winnerId || null, clubChallenge.id);
+  }
+
+  // Close any linked open challenge
+  const openChallenge = db.prepare('SELECT * FROM open_challenges WHERE match_id = ?').get(match.id);
+  if (openChallenge) {
+    db.prepare(`
+      UPDATE open_challenges
+      SET status = 'completed', winner_id = ?, resolved_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(winnerId || null, openChallenge.id);
   }
 }
 

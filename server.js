@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -17,6 +18,7 @@ app.use('/api/matches', require('./routes/matches'));
 app.use('/api/teams', require('./routes/teams'));
 app.use('/api/friends', require('./routes/friends'));
 app.use('/api/verify', require('./routes/verify'));
+app.use('/api/tournaments', require('./routes/tournaments'));
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

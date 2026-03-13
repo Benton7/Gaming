@@ -207,6 +207,31 @@ db.exec(`
   );
 `);
 
+// ===== ELO TABLES =====
+db.exec(`
+  CREATE TABLE IF NOT EXISTS user_elo (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    game_id INTEGER NOT NULL,
+    elo INTEGER DEFAULT 1200,
+    matches_played INTEGER DEFAULT 0,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
+    UNIQUE(user_id, game_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS club_elo (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    club_id INTEGER NOT NULL,
+    game_id INTEGER NOT NULL,
+    elo INTEGER DEFAULT 1200,
+    matches_played INTEGER DEFAULT 0,
+    FOREIGN KEY (club_id) REFERENCES clubs(id) ON DELETE CASCADE,
+    FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
+    UNIQUE(club_id, game_id)
+  );
+`);
+
 // ===== MIGRATIONS =====
 const userCols = db.pragma('table_info(users)').map(c => c.name);
 if (!userCols.includes('bio')) db.exec("ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ''");
@@ -235,6 +260,69 @@ if (!challengeCols.includes('match_id')) db.exec('ALTER TABLE club_challenges AD
 
 const openChallengeCols = db.pragma('table_info(open_challenges)').map(c => c.name);
 if (!openChallengeCols.includes('match_id')) db.exec('ALTER TABLE open_challenges ADD COLUMN match_id INTEGER');
+
+const teamCols = db.pragma('table_info(teams)').map(c => c.name);
+if (!teamCols.includes('elo')) db.exec('ALTER TABLE teams ADD COLUMN elo INTEGER DEFAULT 1200');
+if (!teamCols.includes('elo_matches')) db.exec('ALTER TABLE teams ADD COLUMN elo_matches INTEGER DEFAULT 0');
+
+// ===== TOURNAMENTS =====
+db.exec(`
+  CREATE TABLE IF NOT EXISTS club_tournaments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    club_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    game_id INTEGER NOT NULL,
+    games_per_round INTEGER DEFAULT 1,
+    seeding TEXT DEFAULT 'random',
+    status TEXT DEFAULT 'pending',
+    winner_id INTEGER,
+    created_by INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (club_id) REFERENCES clubs(id) ON DELETE CASCADE,
+    FOREIGN KEY (game_id) REFERENCES games(id),
+    FOREIGN KEY (winner_id) REFERENCES users(id),
+    FOREIGN KEY (created_by) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS club_tournament_participants (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tournament_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    seed INTEGER,
+    FOREIGN KEY (tournament_id) REFERENCES club_tournaments(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE(tournament_id, user_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS club_tournament_matches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tournament_id INTEGER NOT NULL,
+    round INTEGER NOT NULL,
+    match_index INTEGER NOT NULL,
+    player_a_id INTEGER,
+    player_b_id INTEGER,
+    winner_id INTEGER,
+    status TEXT DEFAULT 'pending',
+    FOREIGN KEY (tournament_id) REFERENCES club_tournaments(id) ON DELETE CASCADE,
+    FOREIGN KEY (player_a_id) REFERENCES users(id),
+    FOREIGN KEY (player_b_id) REFERENCES users(id),
+    FOREIGN KEY (winner_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS club_badges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    club_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    game_id INTEGER NOT NULL,
+    badge_type TEXT DEFAULT 'tournament_champion',
+    tournament_id INTEGER,
+    awarded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (club_id) REFERENCES clubs(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (game_id) REFERENCES games(id),
+    UNIQUE(club_id, game_id, badge_type)
+  );
+`);
 
 // ===== SEED GAMES =====
 const allGames = [
@@ -550,6 +638,132 @@ const allGames = [
       { name: 'Diamond', value: 6, color: '#818cf8' },
       { name: 'Master', value: 7, color: '#fbbf24' }
     ])
+  },
+  // ── Sports games ──────────────────────────────────────────
+  {
+    name: 'Madden NFL 25', slug: 'madden-25', icon: '🏈', color: '#22c55e', team_size: 1, bench_size: 0,
+    ranks: JSON.stringify([
+      { name: 'Division X', value: 1, color: '#78716c' },
+      { name: 'Division IX', value: 2, color: '#78716c' },
+      { name: 'Division VIII', value: 3, color: '#9ca3af' },
+      { name: 'Division VII', value: 4, color: '#9ca3af' },
+      { name: 'Division VI', value: 5, color: '#b45309' },
+      { name: 'Division V', value: 6, color: '#b45309' },
+      { name: 'Division IV', value: 7, color: '#d97706' },
+      { name: 'Division III', value: 8, color: '#d97706' },
+      { name: 'Division II', value: 9, color: '#0ea5e9' },
+      { name: 'Division I', value: 10, color: '#818cf8' },
+      { name: 'Champion', value: 11, color: '#fbbf24' },
+      { name: 'Legend', value: 12, color: '#ef4444' }
+    ])
+  },
+  {
+    name: 'NBA 2K25', slug: 'nba-2k25', icon: '🏀', color: '#f97316', team_size: 1, bench_size: 0,
+    ranks: JSON.stringify([
+      { name: 'Rookie I', value: 1, color: '#78716c' },
+      { name: 'Rookie II', value: 2, color: '#78716c' },
+      { name: 'Rookie III', value: 3, color: '#78716c' },
+      { name: 'Pro I', value: 4, color: '#9ca3af' },
+      { name: 'Pro II', value: 5, color: '#9ca3af' },
+      { name: 'Pro III', value: 6, color: '#9ca3af' },
+      { name: 'All-Star I', value: 7, color: '#d97706' },
+      { name: 'All-Star II', value: 8, color: '#d97706' },
+      { name: 'All-Star III', value: 9, color: '#d97706' },
+      { name: 'Superstar I', value: 10, color: '#0ea5e9' },
+      { name: 'Superstar II', value: 11, color: '#0ea5e9' },
+      { name: 'Superstar III', value: 12, color: '#0ea5e9' },
+      { name: 'Hall of Fame I', value: 13, color: '#818cf8' },
+      { name: 'Hall of Fame II', value: 14, color: '#818cf8' },
+      { name: 'Hall of Fame III', value: 15, color: '#818cf8' },
+      { name: 'Legend', value: 16, color: '#fbbf24' }
+    ])
+  },
+  {
+    name: 'EA FC 25', slug: 'ea-fc-25', icon: '⚽', color: '#3b82f6', team_size: 1, bench_size: 0,
+    ranks: JSON.stringify([
+      { name: 'Division 10', value: 1, color: '#78716c' },
+      { name: 'Division 9', value: 2, color: '#78716c' },
+      { name: 'Division 8', value: 3, color: '#9ca3af' },
+      { name: 'Division 7', value: 4, color: '#9ca3af' },
+      { name: 'Division 6', value: 5, color: '#b45309' },
+      { name: 'Division 5', value: 6, color: '#d97706' },
+      { name: 'Division 4', value: 7, color: '#d97706' },
+      { name: 'Division 3', value: 8, color: '#0ea5e9' },
+      { name: 'Division 2', value: 9, color: '#818cf8' },
+      { name: 'Division 1', value: 10, color: '#ef4444' },
+      { name: 'Elite', value: 11, color: '#fbbf24' }
+    ])
+  },
+  {
+    name: 'MLB The Show 25', slug: 'mlb-the-show-25', icon: '⚾', color: '#dc2626', team_size: 1, bench_size: 0,
+    ranks: JSON.stringify([
+      { name: 'Bronze 1', value: 1, color: '#b45309' },
+      { name: 'Bronze 2', value: 2, color: '#b45309' },
+      { name: 'Bronze 3', value: 3, color: '#b45309' },
+      { name: 'Silver 1', value: 4, color: '#9ca3af' },
+      { name: 'Silver 2', value: 5, color: '#9ca3af' },
+      { name: 'Silver 3', value: 6, color: '#9ca3af' },
+      { name: 'Gold 1', value: 7, color: '#d97706' },
+      { name: 'Gold 2', value: 8, color: '#d97706' },
+      { name: 'Gold 3', value: 9, color: '#d97706' },
+      { name: 'Diamond 1', value: 10, color: '#818cf8' },
+      { name: 'Diamond 2', value: 11, color: '#818cf8' },
+      { name: 'Diamond 3', value: 12, color: '#818cf8' },
+      { name: 'The Show', value: 13, color: '#fbbf24' }
+    ])
+  },
+  {
+    name: 'NHL 25', slug: 'nhl-25', icon: '🏒', color: '#0ea5e9', team_size: 1, bench_size: 0,
+    ranks: JSON.stringify([
+      { name: 'Division X', value: 1, color: '#78716c' },
+      { name: 'Division IX', value: 2, color: '#78716c' },
+      { name: 'Division VIII', value: 3, color: '#9ca3af' },
+      { name: 'Division VII', value: 4, color: '#9ca3af' },
+      { name: 'Division VI', value: 5, color: '#b45309' },
+      { name: 'Division V', value: 6, color: '#b45309' },
+      { name: 'Division IV', value: 7, color: '#d97706' },
+      { name: 'Division III', value: 8, color: '#d97706' },
+      { name: 'Division II', value: 9, color: '#0ea5e9' },
+      { name: 'Division I', value: 10, color: '#818cf8' },
+      { name: 'Champion', value: 11, color: '#fbbf24' }
+    ])
+  },
+  {
+    name: 'UFC 5', slug: 'ufc-5', icon: '🥋', color: '#ef4444', team_size: 1, bench_size: 0,
+    ranks: JSON.stringify([
+      { name: 'Prospect', value: 1, color: '#78716c' },
+      { name: 'Contender', value: 2, color: '#9ca3af' },
+      { name: 'Ranked #15', value: 3, color: '#b45309' },
+      { name: 'Ranked #10', value: 4, color: '#b45309' },
+      { name: 'Ranked #5', value: 5, color: '#d97706' },
+      { name: 'Ranked #1', value: 6, color: '#d97706' },
+      { name: 'Interim Champion', value: 7, color: '#0ea5e9' },
+      { name: 'Champion', value: 8, color: '#fbbf24' },
+      { name: 'GOAT', value: 9, color: '#ef4444' }
+    ])
+  },
+  {
+    name: 'PGA Tour 2K25', slug: 'pga-tour-2k25', icon: '⛳', color: '#16a34a', team_size: 1, bench_size: 0,
+    ranks: JSON.stringify([
+      { name: 'Amateur', value: 1, color: '#78716c' },
+      { name: 'Club Pro', value: 2, color: '#9ca3af' },
+      { name: 'Tour Card', value: 3, color: '#b45309' },
+      { name: 'Rising Star', value: 4, color: '#d97706' },
+      { name: 'Tour Winner', value: 5, color: '#0ea5e9' },
+      { name: 'Major Champion', value: 6, color: '#818cf8' },
+      { name: 'World #1', value: 7, color: '#fbbf24' }
+    ])
+  },
+  {
+    name: 'WWE 2K25', slug: 'wwe-2k25', icon: '🤼', color: '#fbbf24', team_size: 1, bench_size: 0,
+    ranks: JSON.stringify([
+      { name: 'Jobber', value: 1, color: '#78716c' },
+      { name: 'Midcarder', value: 2, color: '#9ca3af' },
+      { name: 'Upper Midcarder', value: 3, color: '#b45309' },
+      { name: 'Main Eventer', value: 4, color: '#d97706' },
+      { name: 'Champion', value: 5, color: '#0ea5e9' },
+      { name: 'Legend', value: 6, color: '#fbbf24' }
+    ])
   }
 ];
 
@@ -651,6 +865,141 @@ function getClubGameAverages(clubId) {
   }).sort((a, b) => b.player_count - a.player_count);
 }
 
+// ===== ELO FUNCTIONS =====
+const ELO_DEFAULT = 1200;
+const ELO_MIN = 100;
+const ELO_PROVISIONAL_THRESHOLD = 5;
+
+function _eloK(matchesPlayed) {
+  if (matchesPlayed < 10) return 40;
+  if (matchesPlayed < 30) return 32;
+  return 24;
+}
+
+function _eloExpected(myElo, opponentElo) {
+  return 1 / (1 + Math.pow(10, (opponentElo - myElo) / 400));
+}
+
+function _eloChange(myElo, opponentElo, won, matchesPlayed) {
+  const k = _eloK(matchesPlayed);
+  const expected = _eloExpected(myElo, opponentElo);
+  return Math.round(k * ((won ? 1 : 0) - expected));
+}
+
+/** Get or create user_elo row; returns { elo, matches_played } */
+function getOrCreateUserElo(userId, gameId) {
+  let row = db.prepare('SELECT * FROM user_elo WHERE user_id = ? AND game_id = ?').get(userId, gameId);
+  if (!row) {
+    db.prepare('INSERT OR IGNORE INTO user_elo (user_id, game_id, elo, matches_played) VALUES (?, ?, ?, 0)').run(userId, gameId, ELO_DEFAULT);
+    row = db.prepare('SELECT * FROM user_elo WHERE user_id = ? AND game_id = ?').get(userId, gameId);
+  }
+  return row;
+}
+
+/** Get or create club_elo row */
+function getOrCreateClubElo(clubId, gameId) {
+  let row = db.prepare('SELECT * FROM club_elo WHERE club_id = ? AND game_id = ?').get(clubId, gameId);
+  if (!row) {
+    db.prepare('INSERT OR IGNORE INTO club_elo (club_id, game_id, elo, matches_played) VALUES (?, ?, ?, 0)').run(clubId, gameId, ELO_DEFAULT);
+    row = db.prepare('SELECT * FROM club_elo WHERE club_id = ? AND game_id = ?').get(clubId, gameId);
+  }
+  return row;
+}
+
+/**
+ * Apply ELO update after a completed match.
+ * match: full match row from DB
+ * winnerId: entity_a_id or entity_b_id
+ */
+function updateEloForMatch(match, winnerId) {
+  let gameIds = [];
+  try { gameIds = JSON.parse(match.game_ids); } catch {}
+  let pA = [], pB = [];
+  try { pA = JSON.parse(match.participant_a_ids); } catch {}
+  try { pB = JSON.parse(match.participant_b_ids); } catch {}
+  const aWon = winnerId === match.entity_a_id;
+
+  for (const gameId of gameIds) {
+    // ── Personal ELO ──────────────────────────────────────────
+    // Average ELO of each side for this game
+    const sideAElos = pA.map(uid => getOrCreateUserElo(uid, gameId).elo);
+    const sideBElos = pB.map(uid => getOrCreateUserElo(uid, gameId).elo);
+    const avgA = sideAElos.length ? Math.round(sideAElos.reduce((s, e) => s + e, 0) / sideAElos.length) : ELO_DEFAULT;
+    const avgB = sideBElos.length ? Math.round(sideBElos.reduce((s, e) => s + e, 0) / sideBElos.length) : ELO_DEFAULT;
+
+    // Update each participant's ELO
+    for (const uid of pA) {
+      const row = getOrCreateUserElo(uid, gameId);
+      const delta = _eloChange(row.elo, avgB, aWon, row.matches_played);
+      db.prepare('UPDATE user_elo SET elo = MAX(?, elo + ?), matches_played = matches_played + 1 WHERE user_id = ? AND game_id = ?')
+        .run(ELO_MIN, delta, uid, gameId);
+    }
+    for (const uid of pB) {
+      const row = getOrCreateUserElo(uid, gameId);
+      const delta = _eloChange(row.elo, avgA, !aWon, row.matches_played);
+      db.prepare('UPDATE user_elo SET elo = MAX(?, elo + ?), matches_played = matches_played + 1 WHERE user_id = ? AND game_id = ?')
+        .run(ELO_MIN, delta, uid, gameId);
+    }
+
+    // ── Club ELO (club matches only) ──────────────────────────
+    if (match.match_type === 'club' && match.entity_a_id && match.entity_b_id) {
+      const rowA = getOrCreateClubElo(match.entity_a_id, gameId);
+      const rowB = getOrCreateClubElo(match.entity_b_id, gameId);
+      const deltaA = _eloChange(rowA.elo, rowB.elo, aWon, rowA.matches_played);
+      const deltaB = _eloChange(rowB.elo, rowA.elo, !aWon, rowB.matches_played);
+      db.prepare('UPDATE club_elo SET elo = MAX(?, elo + ?), matches_played = matches_played + 1 WHERE club_id = ? AND game_id = ?')
+        .run(ELO_MIN, deltaA, match.entity_a_id, gameId);
+      db.prepare('UPDATE club_elo SET elo = MAX(?, elo + ?), matches_played = matches_played + 1 WHERE club_id = ? AND game_id = ?')
+        .run(ELO_MIN, deltaB, match.entity_b_id, gameId);
+    }
+  }
+
+  // ── Team ELO (team matches only) ────────────────────────────
+  if (match.match_type === 'team' && match.entity_a_id && match.entity_b_id) {
+    const tA = db.prepare('SELECT elo, elo_matches FROM teams WHERE id = ?').get(match.entity_a_id);
+    const tB = db.prepare('SELECT elo, elo_matches FROM teams WHERE id = ?').get(match.entity_b_id);
+    if (tA && tB) {
+      const deltaA = _eloChange(tA.elo || ELO_DEFAULT, tB.elo || ELO_DEFAULT, aWon, tA.elo_matches || 0);
+      const deltaB = _eloChange(tB.elo || ELO_DEFAULT, tA.elo || ELO_DEFAULT, !aWon, tB.elo_matches || 0);
+      db.prepare('UPDATE teams SET elo = MAX(?, elo + ?), elo_matches = elo_matches + 1 WHERE id = ?')
+        .run(ELO_MIN, deltaA, match.entity_a_id);
+      db.prepare('UPDATE teams SET elo = MAX(?, elo + ?), elo_matches = elo_matches + 1 WHERE id = ?')
+        .run(ELO_MIN, deltaB, match.entity_b_id);
+    }
+  }
+}
+
+/** Get all ELO rows for a user, including game info. Returns only games where matches_played > 0 */
+function getUserEloData(userId) {
+  return db.prepare(`
+    SELECT ue.*, g.name as game_name, g.icon as game_icon, g.color as game_color
+    FROM user_elo ue
+    JOIN games g ON g.id = ue.game_id
+    WHERE ue.user_id = ?
+    ORDER BY ue.elo DESC
+  `).all(userId);
+}
+
+/** Best single-game ELO for a user (only counts if matches_played >= threshold) */
+function getUserBestElo(userId) {
+  const row = db.prepare(`
+    SELECT elo FROM user_elo
+    WHERE user_id = ? AND matches_played >= ?
+    ORDER BY elo DESC LIMIT 1
+  `).get(userId, ELO_PROVISIONAL_THRESHOLD);
+  return row ? row.elo : null;
+}
+
+/** Best club ELO across all games (only if matches_played >= threshold) */
+function getClubBestElo(clubId) {
+  const row = db.prepare(`
+    SELECT elo FROM club_elo
+    WHERE club_id = ? AND matches_played >= ?
+    ORDER BY elo DESC LIMIT 1
+  `).get(clubId, ELO_PROVISIONAL_THRESHOLD);
+  return row ? row.elo : null;
+}
+
 /** Create a match record, returns match id */
 function createMatch({ match_type, entity_a_id, entity_b_id, entity_a_label, entity_b_label, participant_a_ids, participant_b_ids, game_ids, description }) {
   const result = db.prepare(`
@@ -670,4 +1019,8 @@ function createMatch({ match_type, entity_a_id, entity_b_id, entity_a_label, ent
   return result.lastInsertRowid;
 }
 
-module.exports = { db, updateUserGamerscore, getClubAverageGamerscore, getAvgGSForMembers, getClubGameAverages, createMatch };
+module.exports = {
+  db, updateUserGamerscore, getClubAverageGamerscore, getAvgGSForMembers, getClubGameAverages, createMatch,
+  updateEloForMatch, getUserEloData, getUserBestElo, getClubBestElo,
+  ELO_DEFAULT, ELO_PROVISIONAL_THRESHOLD,
+};

@@ -1,5 +1,5 @@
 const express = require('express');
-const { db, updateUserGamerscore } = require('../db');
+const { db, updateUserGamerscore, getUserEloData, getUserBestElo, ELO_PROVISIONAL_THRESHOLD } = require('../db');
 const { authenticate } = require('./middleware');
 
 const router = express.Router();
@@ -70,6 +70,9 @@ router.get('/me', authenticate, (req, res) => {
   let socialLinks = {};
   try { socialLinks = JSON.parse(user.social_links || '{}'); } catch {}
 
+  const eloData = getUserEloData(req.userId);
+  const bestElo = getUserBestElo(req.userId);
+
   res.json({
     ...user,
     social_links: socialLinks,
@@ -77,7 +80,10 @@ router.get('/me', authenticate, (req, res) => {
     club: membership || null,
     teams,
     friend_count: friendCount,
-    pending_friend_requests: pendingRequests
+    pending_friend_requests: pendingRequests,
+    elo_data: eloData,
+    best_elo: bestElo,
+    elo_provisional_threshold: ELO_PROVISIONAL_THRESHOLD,
   });
 });
 
@@ -113,13 +119,14 @@ router.post('/me/avatar', authenticate, (req, res) => {
 router.get('/leaderboard', (req, res) => {
   const users = db.prepare(`
     SELECT u.id, u.username, u.gamertag, u.avatar_color, u.avatar_url, u.gamerscore, u.title, u.created_at,
-           c.name as club_name, c.tag as club_tag
+           c.name as club_name, c.tag as club_tag,
+           (SELECT MAX(ue.elo) FROM user_elo ue WHERE ue.user_id = u.id AND ue.matches_played >= ?) as best_elo
     FROM users u
     LEFT JOIN club_members cm ON u.id = cm.user_id
     LEFT JOIN clubs c ON cm.club_id = c.id
-    ORDER BY u.gamerscore DESC
+    ORDER BY best_elo DESC NULLS LAST, u.gamerscore DESC
     LIMIT 50
-  `).all();
+  `).all(ELO_PROVISIONAL_THRESHOLD);
   res.json(users);
 });
 
@@ -171,8 +178,13 @@ router.get('/:id', (req, res) => {
   let socialLinks = {};
   try { socialLinks = JSON.parse(user.social_links || '{}'); } catch {}
 
+  const eloData = getUserEloData(req.params.id);
+  const bestElo = getUserBestElo(req.params.id);
+
   res.json({
     ...user,
+    elo_data: eloData,
+    best_elo: bestElo,
     social_links: socialLinks,
     accounts: enrichAccounts(accounts),
     club: membership || null,

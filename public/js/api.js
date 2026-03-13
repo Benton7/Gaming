@@ -77,4 +77,20 @@ const api = {
     lookup: (body) => req('POST', '/api/verify/lookup', body),
     refresh: (accountId) => req('POST', `/api/verify/refresh/${accountId}`),
   },
+  matches: {
+    mine: () => req('GET', '/api/matches/mine'),
+    get: (id) => req('GET', `/api/matches/${id}`),
+    report: (id, body) => req('POST', `/api/matches/${id}/report`, body),
+    confirm: (id) => req('POST', `/api/matches/${id}/confirm`),
+    dispute: (id, body) => req('POST', `/api/matches/${id}/dispute`, body),
+    sendMessage: (id, body) => req('POST', `/api/matches/${id}/messages`, body),
+    getMessages: (id, since) => req('GET', `/api/matches/${id}/messages${since ? `?since=${encodeURIComponent(since)}` : ''}`),
+  },
+  tournaments: {
+    forClub: (clubId) => req('GET', `/api/tournaments/club/${clubId}`),
+    get: (id) => req('GET', `/api/tournaments/${id}`),
+    create: (body) => req('POST', '/api/tournaments', body),
+    setWinner: (id, matchId, body) => req('POST', `/api/tournaments/${id}/matches/${matchId}/winner`, body),
+    cancel: (id) => req('DELETE', `/api/tournaments/${id}`),
+  },
 };

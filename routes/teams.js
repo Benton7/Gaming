@@ -57,7 +57,7 @@ router.get('/', (req, res) => {
   if (game_id) { conditions.push('t.game_id = ?'); params.push(game_id); }
   if (search) { conditions.push('(t.name LIKE ? OR t.tag LIKE ?)'); params.push(`%${search}%`, `%${search}%`); }
   if (conditions.length) query += ' WHERE ' + conditions.join(' AND ');
-  query += ' GROUP BY t.id ORDER BY t.team_score DESC LIMIT 50';
+  query += ' GROUP BY t.id ORDER BY CASE WHEN t.elo_matches >= 5 THEN t.elo ELSE NULL END DESC NULLS LAST, t.team_score DESC LIMIT 50';
   res.json(db.prepare(query).all(...params));
 });
 

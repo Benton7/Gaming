@@ -35,7 +35,8 @@ const routes = {
 };
 
 function route() {
-  const hash = location.hash.slice(1) || '/';
+  const full = location.hash.slice(1) || '/';
+  const hash = full.split('?')[0];
   const page = routes[hash] || 'landing';
 
   if (!currentUser && !['landing','login','register'].includes(page)) {
@@ -98,6 +99,7 @@ async function loadPage(page) {
     case 'leaderboard': await loadLeaderboard(); break;
     case 'profile': await loadProfile(); break;
     case 'teams': await loadTeamsPage(); break;
+    case 'match': await loadMatchPage(); break;
   }
 }
 
@@ -105,7 +107,8 @@ async function loadPage(page) {
 function updateNavUser() {
   if (!currentUser) return;
   document.getElementById('navUsername').textContent = currentUser.gamertag || currentUser.username;
-  document.getElementById('menuGamerscore').textContent = formatScore(currentUser.gamerscore);
+  const navElo = currentUser.best_elo;
+  document.getElementById('menuGamerscore').textContent = navElo ? `ELO ${formatScore(navElo)}` : `GS ${formatScore(currentUser.gamerscore)}`;
   setAvatar('navAvatar', currentUser.gamertag || currentUser.username, currentUser.avatar_color, currentUser.avatar_url);
 }
 
@@ -196,9 +199,21 @@ async function loadDashboard() {
   } catch { return; }
 
   document.getElementById('dashWelcome').textContent = `Welcome back, ${currentUser.gamertag || currentUser.username}!`;
-  document.getElementById('dashGamerscore').textContent = formatScore(currentUser.gamerscore);
-  document.getElementById('dashGamesConnected').textContent = `${currentUser.accounts.length} game${currentUser.accounts.length !== 1 ? 's' : ''} connected`;
-  document.getElementById('dashRankTitle').textContent = getTitleFromScore(currentUser.gamerscore);
+  // ELO (primary) — show best calibrated ELO or "Calibrating"
+  const bestElo = currentUser.best_elo;
+  document.getElementById('dashGamerscore').textContent = bestElo ? formatScore(bestElo) : '—';
+  const eloSubEl = document.getElementById('dashGamesConnected');
+  if (!bestElo) {
+    const totalMatches = (currentUser.elo_data || []).reduce((s, r) => s + r.matches_played, 0);
+    const needed = 5 - Math.min(totalMatches, 5);
+    eloSubEl.textContent = totalMatches === 0 ? 'Play 5 matches to earn your ELO' : `${needed} more match${needed !== 1 ? 'es' : ''} to calibrate`;
+  } else {
+    eloSubEl.textContent = `${currentUser.accounts.length} game${currentUser.accounts.length !== 1 ? 's' : ''} connected`;
+  }
+  document.getElementById('dashRankTitle').textContent = bestElo ? getEloTitle(bestElo) : '';
+  // Gamerscore (secondary label update)
+  const gsSecEl = document.getElementById('dashGamerscoreSecondary');
+  if (gsSecEl) gsSecEl.textContent = `GS: ${formatScore(currentUser.gamerscore)}`;
 
   renderClubSummary(currentUser.club);
   renderDashAccounts(currentUser.accounts);
@@ -212,6 +227,22 @@ function getTitleFromScore(score) {
   if (score >= 1000) return '◈ Silver';
   if (score > 0) return '◈ Bronze';
   return '';
+}
+
+function getEloTitle(elo) {
+  if (!elo) return '';
+  if (elo >= 2000) return '◈ Grandmaster';
+  if (elo >= 1800) return '◈ Master';
+  if (elo >= 1600) return '◈ Diamond';
+  if (elo >= 1400) return '◈ Platinum';
+  if (elo >= 1250) return '◈ Gold';
+  if (elo >= 1100) return '◈ Silver';
+  return '◈ Bronze';
+}
+
+function formatElo(elo, matchesPlayed) {
+  if (matchesPlayed < 5) return `<span style="color:var(--text-3);font-style:italic">Calibrating (${matchesPlayed}/5)</span>`;
+  return `<span class="mono" style="color:#fbbf24;font-weight:700">${formatScore(elo)}</span>`;
 }
 
 function renderClubSummary(club) {
@@ -303,7 +334,8 @@ async function loadGames() {
   grid.innerHTML = allGames.map(game => {
     const acct = connected[game.id];
     const style = `--game-color: ${game.color}`;
-    const hasApi = !!(verifySupport[game.slug]?.available);
+    const gameSupport = verifySupport[game.slug];
+    const hasApi = !!(gameSupport?.available && gameSupport?.method !== 'manual');
 
     if (acct) {
       const trackerBadge = acct.tracker_url
@@ -349,7 +381,7 @@ async function loadGames() {
           <span class="game-big-icon">${game.icon}</span>
           <div>
             <div class="game-card-name">${game.name}</div>
-            <div class="game-card-disconnected">${hasApi ? '⚡ tracker.gg rank lookup' : 'Not connected'}</div>
+            <div class="game-card-disconnected">Not connected</div>
           </div>
         </div>
         <div class="game-card-actions">
@@ -431,11 +463,30 @@ async function renderMyClub(clubId) {
           </div>
         </div>
         <div class="my-club-stats">
-          <div class="club-stat"><div class="club-stat-val club-score-val mono">${formatScore(club.club_score)}</div><div class="club-stat-lbl">Club Score</div></div>
+          <div class="club-stat">
+            <div class="club-stat-val mono" style="color:#fbbf24">${club.best_elo ? formatScore(club.best_elo) : '—'}</div>
+            <div class="club-stat-lbl">Club ELO</div>
+          </div>
           <div class="club-stat"><div class="club-stat-val club-wins-val mono">${club.wins}</div><div class="club-stat-lbl">Wins</div></div>
           <div class="club-stat"><div class="club-stat-val text-red mono">${club.losses}</div><div class="club-stat-lbl">Losses</div></div>
           <div class="club-stat"><div class="club-stat-val mono">${club.member_count}/20</div><div class="club-stat-lbl">Members</div></div>
         </div>
+        ${club.elo_data && club.elo_data.length ? `
+        <div style="margin-top:0.75rem">
+          <div class="section-title" style="font-size:0.75rem;margin-bottom:0.35rem;color:var(--text-3)">ELO by Game</div>
+          <div class="game-avg-grid">
+            ${club.elo_data.map(row => {
+              const isCalibrated = row.matches_played >= 5;
+              return `<div class="game-avg-chip">
+                <span>${row.game_icon}</span>
+                <span>${row.game_name}</span>
+                ${isCalibrated
+                  ? `<span class="game-avg-chip-rank" style="color:#fbbf24">${formatScore(row.elo)}</span>`
+                  : `<span class="game-avg-chip-rank" style="color:var(--text-3);font-style:italic">${row.matches_played}/5</span>`}
+              </div>`;
+            }).join('')}
+          </div>
+        </div>` : ''}
 
         ${club.game_averages && club.game_averages.length ? `
         <div class="club-game-averages">
@@ -468,7 +519,30 @@ async function renderMyClub(clubId) {
             `).join('')}
           </div>
         </div>
+
+        ${club.badges && club.badges.length ? `
+        <div style="margin-top:1.25rem">
+          <div class="section-title" style="font-size:0.82rem;margin-bottom:0.5rem">🏆 Tournament Champions</div>
+          <div style="display:flex;flex-wrap:wrap;gap:0.5rem">
+            ${club.badges.map(b => `
+              <div class="tournament-champion-badge" style="--badge-color:${b.game_color || '#f59e0b'}">
+                <span class="badge-game-icon">${b.game_icon}</span>
+                <div class="badge-info">
+                  <div class="badge-player">${escapeHtml(b.gamertag || b.username)}</div>
+                  <div class="badge-game">${escapeHtml(b.game_name)} Champion</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>` : ''}
       </div>`;
+
+    // Show/hide tournament create button for owner
+    const createBtn = document.getElementById('createTournamentBtn');
+    if (createBtn) createBtn.style.display = isOwner ? '' : 'none';
+
+    await loadClubTournaments(clubId);
+    await loadActiveMatches('myClubMatches', 'myClubMatchesSection', 'club');
 
     const challengesEl = document.getElementById('myClubChallenges');
     if (!club.challenges || club.challenges.length === 0) {
@@ -502,6 +576,43 @@ async function renderMyClub(clubId) {
   } catch (err) {
     console.error(err);
   }
+}
+
+function renderActiveMatchCards(matches, type) {
+  if (!matches.length) return '';
+  return matches.map(m => {
+    const statusColor = m.status === 'disputed' ? '#f59e0b' : '#10b981';
+    const statusLabel = m.status === 'disputed' ? 'Disputed' : 'In Progress';
+    const opponentLabel = type === 'club'
+      ? (m.entity_a_label && m.entity_b_label ? `${m.entity_a_label} vs ${m.entity_b_label}` : 'Club Match')
+      : (m.entity_a_label && m.entity_b_label ? `${m.entity_a_label} vs ${m.entity_b_label}` : 'Team Match');
+    const gameIcons = (m.games || []).map(g => `<span title="${escapeHtml(g.name)}">${escapeHtml(g.icon || g.name[0])}</span>`).join(' ');
+    return `<div class="challenge-card" style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+      <div>
+        <div style="font-weight:700;color:#e0e0f0">${escapeHtml(opponentLabel)}</div>
+        <div style="font-size:0.8rem;color:#a0a0b0;margin-top:0.15rem">${gameIcons}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:0.75rem">
+        <span style="padding:0.2rem 0.6rem;border-radius:9999px;font-size:0.75rem;font-weight:700;background:${statusColor}22;color:${statusColor};border:1px solid ${statusColor}55">${statusLabel}</span>
+        <a class="btn btn-primary btn-sm" href="#/match?id=${m.id}">Open Match</a>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function loadActiveMatches(listElId, sectionElId, type) {
+  try {
+    const matches = await api.matches.mine();
+    const filtered = matches.filter(m => m.match_type === type);
+    const section = document.getElementById(sectionElId);
+    const list = document.getElementById(listElId);
+    if (!filtered.length) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = '';
+    list.innerHTML = renderActiveMatchCards(filtered, type);
+  } catch {}
 }
 
 async function loadOpenChallenges() {
@@ -627,14 +738,17 @@ async function kickMember(clubId, userId) {
 async function respondChallenge(challengeId, action) {
   try {
     const res = await api.clubs.respond(challengeId, { action });
-    if (action === 'accept') {
-      const msg = res.winner ? `Challenge resolved! Winner: [${res.winner.tag}] ${res.winner.name} (+${res.score_awarded} pts)` : 'Challenge resolved!';
-      showToast(msg, 'success');
+    if (action === 'accept' && res.match_id) {
+      showToast('Challenge accepted! Opening match room...', 'success');
+      location.hash = `#/match?id=${res.match_id}`;
+    } else if (action === 'accept') {
+      showToast('Challenge accepted!', 'success');
+      currentUser = await api.users.me();
+      await loadClubs();
     } else {
       showToast('Challenge declined.', 'success');
+      await loadClubs();
     }
-    currentUser = await api.users.me();
-    await loadClubs();
   } catch (err) {
     showToast(err.message, 'error');
   }
@@ -657,11 +771,12 @@ function renderPlayerLeaderboard(players) {
   const el = document.getElementById('playerLeaderboard');
   if (!players.length) { el.innerHTML = '<p class="text-muted">No players yet.</p>'; return; }
   el.innerHTML = `<table class="leaderboard-table">
-    <thead><tr><th>#</th><th>Player</th><th>Club</th><th>Gamerscore</th></tr></thead>
+    <thead><tr><th>#</th><th>Player</th><th>Club</th><th>ELO</th><th style="font-size:0.75rem;color:var(--text-3)">GS</th></tr></thead>
     <tbody>${players.map((p, i) => {
       const rankClass = i === 0 ? 'lb-rank-1' : i === 1 ? 'lb-rank-2' : i === 2 ? 'lb-rank-3' : '';
       const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
       const avatarEl = buildAvatarHtml(p, 'sm');
+      const eloDisplay = p.best_elo ? `<span class="lb-score mono" style="color:#fbbf24">${formatScore(p.best_elo)}</span>` : `<span style="color:var(--text-3);font-style:italic;font-size:0.8rem">Unranked</span>`;
       return `<tr>
         <td><span class="lb-rank ${rankClass}">${medal || i + 1}</span></td>
         <td><div class="lb-user">
@@ -669,7 +784,8 @@ function renderPlayerLeaderboard(players) {
           <span>${escapeHtml(p.gamertag || p.username)} ${p.id === currentUser?.id ? '<span style="font-size:0.72rem;color:var(--accent)">(you)</span>' : ''}</span>
         </div></td>
         <td>${p.club_name ? `<span style="font-size:0.82rem;color:var(--text-2)">[${p.club_tag}] ${escapeHtml(p.club_name)}</span>` : '<span class="text-muted">—</span>'}</td>
-        <td><span class="lb-score mono">${formatScore(p.gamerscore)}</span></td>
+        <td>${eloDisplay}</td>
+        <td><span class="mono" style="font-size:0.8rem;color:var(--text-3)">${formatScore(p.gamerscore)}</span></td>
       </tr>`;
     }).join('')}</tbody>
   </table>`;
@@ -685,11 +801,12 @@ async function loadFriendsLeaderboard() {
       return;
     }
     el.innerHTML = `<table class="leaderboard-table">
-      <thead><tr><th>#</th><th>Player</th><th>Club</th><th>Gamerscore</th></tr></thead>
+      <thead><tr><th>#</th><th>Player</th><th>Club</th><th>ELO</th><th style="font-size:0.75rem;color:var(--text-3)">GS</th></tr></thead>
       <tbody>${friends.map((p, i) => {
         const rankClass = i === 0 ? 'lb-rank-1' : i === 1 ? 'lb-rank-2' : i === 2 ? 'lb-rank-3' : '';
         const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
         const avatarEl = buildAvatarHtml(p, 'sm');
+        const eloDisplay = p.best_elo ? `<span class="lb-score mono" style="color:#fbbf24">${formatScore(p.best_elo)}</span>` : `<span style="color:var(--text-3);font-style:italic;font-size:0.8rem">Unranked</span>`;
         return `<tr>
           <td><span class="lb-rank ${rankClass}">${medal || i + 1}</span></td>
           <td><div class="lb-user">
@@ -698,7 +815,8 @@ async function loadFriendsLeaderboard() {
             ${p.title ? `<span class="player-title">${escapeHtml(p.title)}</span>` : ''}
           </div></td>
           <td>${p.club_name ? `<span style="font-size:0.82rem;color:var(--text-2)">[${p.club_tag}] ${escapeHtml(p.club_name)}</span>` : '<span class="text-muted">—</span>'}</td>
-          <td><span class="lb-score mono">${formatScore(p.gamerscore)}</span></td>
+          <td>${eloDisplay}</td>
+          <td><span class="mono" style="font-size:0.8rem;color:var(--text-3)">${formatScore(p.gamerscore)}</span></td>
         </tr>`;
       }).join('')}</tbody>
     </table>`;
@@ -711,16 +829,17 @@ function renderClubLeaderboard(clubs) {
   const el = document.getElementById('clubLeaderboard');
   if (!clubs.length) { el.innerHTML = '<p class="text-muted">No clubs yet.</p>'; return; }
   el.innerHTML = `<table class="leaderboard-table">
-    <thead><tr><th>#</th><th>Club</th><th>Members</th><th>W / L</th><th>Club Score</th></tr></thead>
+    <thead><tr><th>#</th><th>Club</th><th>Members</th><th>W / L</th><th>ELO</th></tr></thead>
     <tbody>${clubs.map((c, i) => {
       const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
       const rankClass = i === 0 ? 'lb-rank-1' : i === 1 ? 'lb-rank-2' : i === 2 ? 'lb-rank-3' : '';
+      const eloDisplay = c.best_elo ? `<span class="lb-club-score mono" style="color:#fbbf24">${formatScore(c.best_elo)}</span>` : `<span style="color:var(--text-3);font-style:italic;font-size:0.8rem">Unranked</span>`;
       return `<tr>
         <td><span class="lb-rank ${rankClass}">${medal || i + 1}</span></td>
         <td><div class="lb-user"><strong>[${c.tag}]</strong>&nbsp;${escapeHtml(c.name)}</div></td>
         <td class="mono">${c.member_count}/20</td>
         <td><span class="text-green mono">${c.wins}W</span> / <span class="text-red mono">${c.losses}L</span></td>
-        <td><span class="lb-club-score mono">${formatScore(c.club_score)}</span></td>
+        <td>${eloDisplay}</td>
       </tr>`;
     }).join('')}</tbody>
   </table>`;
@@ -750,9 +869,38 @@ function renderProfileCard(user) {
   document.getElementById('profileGamertag').textContent = user.gamertag || user.username;
   document.getElementById('profileUsername').textContent = `@${user.username}`;
   document.getElementById('profileBio').textContent = user.bio || '';
-  document.getElementById('profileGamerscore').textContent = formatScore(user.gamerscore);
+  const profileBestElo = user.best_elo;
+  const profileEloEl = document.getElementById('profileGamerscore');
+  profileEloEl.innerHTML = profileBestElo
+    ? `<span style="color:#fbbf24">${formatScore(profileBestElo)}</span> <span style="font-size:0.65em;color:var(--text-3);font-weight:400">ELO</span>`
+    : `<span style="font-size:0.75em;color:var(--text-3);font-style:italic">Unranked</span>`;
+  // Gamerscore sub-label
+  const gsSubEl = document.getElementById('profileGamerscoreSub');
+  if (gsSubEl) gsSubEl.textContent = `GS: ${formatScore(user.gamerscore)}`;
   document.getElementById('profileFriendCount').textContent = user.friend_count || 0;
   document.getElementById('profileGamesCount').textContent = user.accounts.length;
+
+  // Per-game ELO breakdown
+  const eloSectionEl = document.getElementById('profileEloSection');
+  if (eloSectionEl && user.elo_data && user.elo_data.length) {
+    eloSectionEl.style.display = '';
+    eloSectionEl.innerHTML = `
+      <div class="section-title" style="font-size:0.82rem;margin-bottom:0.5rem;margin-top:1.25rem">ELO by Game</div>
+      <div class="game-avg-grid">
+        ${user.elo_data.map(row => {
+          const isCalibrated = row.matches_played >= 5;
+          return `<div class="game-avg-chip">
+            <span>${row.game_icon}</span>
+            <span>${escapeHtml(row.game_name)}</span>
+            ${isCalibrated
+              ? `<span class="game-avg-chip-rank" style="color:#fbbf24">${formatScore(row.elo)}</span>`
+              : `<span class="game-avg-chip-rank" style="color:var(--text-3);font-style:italic">${row.matches_played}/5</span>`}
+          </div>`;
+        }).join('')}
+      </div>`;
+  } else if (eloSectionEl) {
+    eloSectionEl.style.display = 'none';
+  }
 
   setAvatar('profileAvatar', user.gamertag || user.username, user.avatar_color, user.avatar_url);
 
@@ -766,7 +914,7 @@ function renderProfileCard(user) {
     titleBadge.textContent = user.title;
     titleBadge.style.display = '';
   } else {
-    const autoTitle = getTitleFromScore(user.gamerscore);
+    const autoTitle = user.best_elo ? getEloTitle(user.best_elo) : getTitleFromScore(user.gamerscore);
     if (autoTitle) { titleBadge.textContent = autoTitle; titleBadge.style.display = ''; }
     else titleBadge.style.display = 'none';
   }
@@ -832,12 +980,10 @@ function renderProfileGames(accounts) {
   }
   // accounts already sorted best → worst by backend
   el.innerHTML = accounts.map((a, i) => {
-    const verifiedBadge = a.verified
-      ? `<span class="verified-badge" title="Verified via API">✓ Verified</span>`
-      : `<button class="btn-verify" onclick="openVerifyModal(${a.id}, '${a.slug}')">Verify</button>`;
     const trackerBadge = a.tracker_url
       ? `<a href="${escapeHtml(a.tracker_url)}" target="_blank" rel="noopener" class="tracker-badge">🔗 Linked</a>`
       : '';
+    const updateBtn = `<button class="btn btn-ghost btn-sm" style="font-size:0.75rem" onclick="openUpdateRank(${a.id}, ${JSON.stringify(a.ranks).replace(/"/g, '&quot;')}, ${a.current_rank_index}, ${a.peak_rank_index}, ${JSON.stringify(a.tracker_url || '').replace(/"/g, '&quot;')})">Update</button>`;
     return `
     <div class="profile-game-row">
       <div class="profile-game-rank-num">#${i + 1}</div>
@@ -845,7 +991,6 @@ function renderProfileGames(accounts) {
       <div class="profile-game-info">
         <div class="profile-game-name">${escapeHtml(a.game_name)}
           <span class="game-platform-small">${a.platform}</span>
-          ${a.verified ? '<span class="verified-badge-inline">✓</span>' : ''}
         </div>
         <div class="profile-game-user">@${escapeHtml(a.platform_username)}</div>
       </div>
@@ -855,7 +1000,7 @@ function renderProfileGames(accounts) {
       </div>
       <div class="profile-game-actions">
         ${trackerBadge}
-        ${verifiedBadge}
+        ${updateBtn}
       </div>
     </div>`;
   }).join('');
@@ -945,21 +1090,44 @@ function selectColor(color, el, type) {
 async function handleAvatarUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
-  if (file.size > 4 * 1024 * 1024) { showToast('Image must be under 4MB', 'error'); return; }
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    const dataUrl = e.target.result;
-    try {
-      await api.users.uploadAvatar({ avatar_url: dataUrl });
-      currentUser = await api.users.me();
-      setAvatar('profileAvatar', currentUser.gamertag || currentUser.username, currentUser.avatar_color, dataUrl);
-      setAvatar('navAvatar', currentUser.gamertag || currentUser.username, currentUser.avatar_color, dataUrl);
-      showToast('Profile photo updated!', 'success');
-    } catch (err) {
-      showToast(err.message, 'error');
-    }
-  };
-  reader.readAsDataURL(file);
+  if (!file.type.startsWith('image/')) { showToast('Please select an image file.', 'error'); return; }
+
+  try {
+    const dataUrl = await resizeImageToDataUrl(file, 800, 800, 0.85);
+    await api.users.uploadAvatar({ avatar_url: dataUrl });
+    currentUser = await api.users.me();
+    setAvatar('profileAvatar', currentUser.gamertag || currentUser.username, currentUser.avatar_color, dataUrl);
+    setAvatar('navAvatar', currentUser.gamertag || currentUser.username, currentUser.avatar_color, dataUrl);
+    showToast('Profile photo updated!', 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+function resizeImageToDataUrl(file, maxW, maxH, quality) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Invalid image file'));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxW || height > maxH) {
+          const ratio = Math.min(maxW / width, maxH / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 async function saveProfile() {
@@ -992,11 +1160,22 @@ async function saveProfile() {
 }
 
 // ===== FRIENDS =====
-function openAddFriendModal() {
+let _friendStatusCache = null; // { friendIds: Set, sentIds: Set, receivedMap: Map<userId, requestId> }
+
+async function openAddFriendModal() {
   document.getElementById('friendSearchInput').value = '';
   document.getElementById('friendSearchResults').innerHTML = '';
   hideError('addFriendError');
   document.getElementById('addFriendSuccess').style.display = 'none';
+  _friendStatusCache = null;
+  // Pre-load friendship statuses so search results show correct state
+  try {
+    const [friends, requests] = await Promise.all([api.friends.list(), api.friends.requests()]);
+    const friendIds = new Set(friends.map(f => f.id));
+    const sentIds = new Set(); // we don't have a "sent" list endpoint, populated on demand
+    const receivedMap = new Map(requests.map(r => [r.user_id, r.id]));
+    _friendStatusCache = { friendIds, sentIds, receivedMap };
+  } catch { _friendStatusCache = { friendIds: new Set(), sentIds: new Set(), receivedMap: new Map() }; }
   openModal('addFriendModal');
 }
 
@@ -1009,16 +1188,29 @@ async function searchFriendUsers(q) {
     try {
       const users = await api.users.search(q);
       if (!users.length) { el.innerHTML = '<p class="text-muted" style="font-size:0.82rem;padding:0.5rem 0">No users found.</p>'; return; }
-      el.innerHTML = users.map(u => `
+      const cache = _friendStatusCache || { friendIds: new Set(), sentIds: new Set(), receivedMap: new Map() };
+      el.innerHTML = users.map(u => {
+        let actionBtn;
+        if (cache.friendIds.has(u.id)) {
+          actionBtn = `<span class="btn btn-ghost btn-sm" style="opacity:0.6;cursor:default">Friends ✓</span>`;
+        } else if (cache.receivedMap.has(u.id)) {
+          const reqId = cache.receivedMap.get(u.id);
+          actionBtn = `<button class="btn btn-success btn-sm" onclick="acceptFromSearch(${reqId}, ${u.id}, this)">Accept</button>`;
+        } else if (cache.sentIds.has(u.id)) {
+          actionBtn = `<span class="btn btn-ghost btn-sm" style="opacity:0.6;cursor:default">Sent ✓</span>`;
+        } else {
+          actionBtn = `<button class="btn btn-primary btn-sm" onclick="sendFriendRequest(${u.id}, this)">Add</button>`;
+        }
+        return `
         <div class="friend-search-row">
           <div class="avatar-sm" style="background:${u.avatar_color || '#6366f1'}">${(u.gamertag || u.username)[0].toUpperCase()}</div>
           <div class="friend-info" style="flex:1">
             <div class="friend-name">${escapeHtml(u.gamertag || u.username)}</div>
             <div class="friend-gs mono">${formatScore(u.gamerscore)} GS</div>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="sendFriendRequest(${u.id}, this)">Add</button>
-        </div>
-      `).join('');
+          ${actionBtn}
+        </div>`;
+      }).join('');
     } catch { el.innerHTML = '<p class="text-muted" style="font-size:0.82rem">Search failed.</p>'; }
   }, 350);
 }
@@ -1028,12 +1220,32 @@ async function sendFriendRequest(userId, btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
   try {
     await api.friends.sendRequest(userId);
-    if (btn) { btn.textContent = 'Sent ✓'; btn.className = 'btn btn-ghost btn-sm'; }
+    if (btn) { btn.textContent = 'Sent ✓'; btn.className = 'btn btn-ghost btn-sm'; btn.style.opacity = '0.6'; btn.style.cursor = 'default'; btn.disabled = true; }
+    if (_friendStatusCache) _friendStatusCache.sentIds.add(userId);
     document.getElementById('addFriendSuccess').style.display = '';
     document.getElementById('addFriendSuccess').textContent = 'Friend request sent!';
     setTimeout(() => { document.getElementById('addFriendSuccess').style.display = 'none'; }, 3000);
   } catch (err) {
     if (btn) { btn.disabled = false; btn.textContent = 'Add'; }
+    showError('addFriendError', err.message);
+  }
+}
+
+async function acceptFromSearch(requestId, userId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Accepting...'; }
+  try {
+    await api.friends.accept(requestId);
+    if (btn) { btn.outerHTML = `<span class="btn btn-ghost btn-sm" style="opacity:0.6;cursor:default">Friends ✓</span>`; }
+    if (_friendStatusCache) {
+      _friendStatusCache.friendIds.add(userId);
+      _friendStatusCache.receivedMap.delete(userId);
+    }
+    currentUser = await api.users.me();
+    updateNavUser();
+    loadProfileFriends();
+    showToast('Friend added!', 'success');
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Accept'; }
     showError('addFriendError', err.message);
   }
 }
@@ -1574,10 +1786,14 @@ async function submitAcceptOpenChallenge() {
   try {
     const res = await api.clubs.acceptOpenChallenge(acceptingOpenChallengeId, { participant_ids: memberIds });
     closeAllModals();
-    const msg = res.winner ? `Challenge complete! Winner: [${res.winner.tag}] ${res.winner.name} (+${res.score_awarded} pts)` : 'Challenge complete!';
-    showToast(msg, 'success');
-    currentUser = await api.users.me();
-    await loadClubs();
+    if (res.match_id) {
+      showToast('Challenge accepted! Opening match room...', 'success');
+      location.hash = `#/match?id=${res.match_id}`;
+    } else {
+      showToast('Challenge accepted!', 'success');
+      currentUser = await api.users.me();
+      await loadClubs();
+    }
   } catch (err) {
     showError('acceptOpenChallengeError', err.message);
   }
@@ -1668,6 +1884,7 @@ async function loadMyTeams() {
     } else {
       invSection.style.display = 'none';
     }
+    await loadActiveMatches('myTeamMatches', 'myTeamMatchesSection', 'team');
   } catch (err) {
     el.innerHTML = '<p class="text-muted">Failed to load teams.</p>';
   }
@@ -1685,7 +1902,10 @@ function renderTeamCard(t, isMine) {
     <div class="club-card-stats">
       <div class="club-stat"><div class="club-stat-val mono">${t.wins || 0}</div><div class="club-stat-lbl">Wins</div></div>
       <div class="club-stat"><div class="club-stat-val text-red mono">${t.losses || 0}</div><div class="club-stat-lbl">Losses</div></div>
-      <div class="club-stat"><div class="club-stat-val mono">${formatScore(t.team_score || 0)}</div><div class="club-stat-lbl">Score</div></div>
+      <div class="club-stat">
+        <div class="club-stat-val mono" style="${(t.elo_matches || 0) >= 5 ? 'color:#fbbf24' : ''}">${(t.elo_matches || 0) >= 5 ? formatScore(t.elo) : '—'}</div>
+        <div class="club-stat-lbl">ELO</div>
+      </div>
     </div>
     <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem">
       <button class="btn btn-ghost btn-sm" onclick="openTeamDetail(${t.id})">View</button>
@@ -1979,4 +2199,520 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+// ===== MATCH PAGE =====
+let _matchPollTimer = null;
+let _matchLastMsgTime = null;
+
+async function loadMatchPage() {
+  const params = new URLSearchParams(location.hash.split('?')[1] || '');
+  const matchId = params.get('id');
+  const el = document.getElementById('matchPageContent');
+  if (!matchId) {
+    el.innerHTML = '<p class="text-muted" style="padding:2rem">No match ID specified.</p>';
+    return;
+  }
+  clearInterval(_matchPollTimer);
+  el.innerHTML = '<p class="text-muted" style="padding:2rem">Loading match...</p>';
+  try {
+    const match = await api.matches.get(matchId);
+    _matchLastMsgTime = match.messages?.length ? match.messages[match.messages.length - 1].created_at : null;
+    renderMatch(match);
+    _matchPollTimer = setInterval(() => pollMatchMessages(matchId), 5000);
+  } catch (err) {
+    el.innerHTML = `<p class="text-muted" style="padding:2rem">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function renderMatch(match) {
+  const el = document.getElementById('matchPageContent');
+  const isA = match.participant_a_ids.includes(currentUser.id);
+  const isB = match.participant_b_ids.includes(currentUser.id);
+  const myTeam = isA ? 'a' : 'b';
+
+  const statusLabel = { active: 'In Progress', disputed: 'Disputed', completed: 'Completed' }[match.status] || match.status;
+  const statusColor = { active: '#10b981', disputed: '#f59e0b', completed: '#6366f1' }[match.status] || '#888';
+
+  const gameIcons = match.games.map(g => `<span title="${escapeHtml(g.name)}" style="font-size:1.25rem">${escapeHtml(g.icon || g.name[0])}</span>`).join(' ');
+
+  function renderTeam(participants, label) {
+    return `<div class="match-team" style="flex:1;min-width:220px">
+      <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:#888;margin-bottom:0.5rem">${label}</div>
+      ${participants.map(p => {
+        const initials = (p.gamertag || p.username || '?')[0].toUpperCase();
+        const accountLines = match.games.map(g => {
+          const acct = p.accounts.find(a => a.game_id === g.id);
+          return acct
+            ? `<div style="font-size:0.75rem;color:#a0a0b0;margin-left:1.75rem">${escapeHtml(g.icon || '')} <span style="color:#d0d0e0">${escapeHtml(acct.platform_username)}</span></div>`
+            : `<div style="font-size:0.75rem;color:#555;margin-left:1.75rem">${escapeHtml(g.icon || '')} not connected</div>`;
+        }).join('');
+        return `<div style="margin-bottom:0.75rem">
+          <div style="display:flex;align-items:center;gap:0.5rem">
+            <div style="width:1.5rem;height:1.5rem;border-radius:50%;background:${escapeHtml(p.avatar_color||'#6366f1')};display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;color:#fff;flex-shrink:0">${initials}</div>
+            <span style="font-weight:600;color:#e0e0f0">${escapeHtml(p.gamertag || p.username)}</span>
+          </div>
+          ${accountLines}
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  // Score reporting section
+  let scoreSection = '';
+  if (match.status === 'active' || match.status === 'disputed') {
+    const myReported = isA ? match.reported_by_a : match.reported_by_b;
+    const oppReported = isA ? match.reported_by_b : match.reported_by_a;
+    const myScore = isA ? match.report_a_wins : match.report_b_wins;
+    const oppScore = isA ? match.report_b_wins : match.report_a_wins;
+
+    scoreSection = `<div class="card" style="margin-top:1.5rem;padding:1.25rem">
+      <div style="font-size:1rem;font-weight:700;margin-bottom:1rem;color:#e0e0f0">Report Score</div>
+      ${myReported
+        ? `<p style="color:#a0a0b0;font-size:0.875rem">You reported: <strong style="color:#10b981">${myScore} wins</strong> for your team.
+           ${oppReported ? `Opponent reported: <strong style="color:${match.report_a_wins === match.report_b_wins ? '#10b981' : '#ef4444'}">${oppScore} wins</strong>.` : 'Waiting for opponent to report.'}</p>`
+        : `<div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
+             <label style="color:#a0a0b0;font-size:0.875rem">My team won:</label>
+             <input id="matchWinsInput" type="number" min="0" max="99" placeholder="Rounds won" style="width:120px;padding:0.4rem 0.6rem;background:#1a1a2e;border:1px solid #333;border-radius:6px;color:#e0e0f0;font-size:0.875rem" />
+             <button class="btn btn-primary btn-sm" onclick="submitMatchReport(${match.id})">Submit Score</button>
+           </div>`
+      }
+      ${match.status === 'disputed' ? `<div style="margin-top:1rem;padding:0.75rem;background:#2a1a0e;border:1px solid #7c3a0e;border-radius:8px;color:#fbbf24;font-size:0.875rem">
+        Scores are disputed.${match.dispute_reason ? ` Reason: ${escapeHtml(match.dispute_reason)}` : ''}<br>
+        <button class="btn btn-sm" style="margin-top:0.5rem;background:#7c3a0e;color:#fbbf24;border:none" onclick="openDisputeModal(${match.id})">Attach Proof / Update Dispute</button>
+        ${myReported && oppReported ? `<button class="btn btn-sm" style="margin-top:0.5rem;margin-left:0.5rem;background:#1a3a2e;color:#10b981;border:1px solid #10b981" onclick="confirmMatchScore(${match.id})">Accept Opponent's Score</button>` : ''}
+      </div>` : ''}
+    </div>`;
+  } else if (match.status === 'completed') {
+    const winnerIsA = match.winner_entity_id === match.entity_a_id;
+    scoreSection = `<div class="card" style="margin-top:1.5rem;padding:1.25rem;text-align:center">
+      <div style="font-size:1.5rem;font-weight:800;color:#10b981;margin-bottom:0.5rem">Match Complete</div>
+      <div style="font-size:1.1rem;color:#e0e0f0">${escapeHtml(match.score_a ?? 0)} — ${escapeHtml(match.score_b ?? 0)}</div>
+      <div style="font-size:0.875rem;color:#a0a0b0;margin-top:0.25rem">
+        ${winnerIsA ? 'Team A wins' : 'Team B wins'}${match.score_awarded ? ` · +${match.score_awarded} pts` : ''}
+      </div>
+    </div>`;
+  }
+
+  // Chat
+  const chatHtml = `<div class="card" style="margin-top:1.5rem;padding:1.25rem">
+    <div style="font-size:0.9rem;font-weight:700;margin-bottom:0.75rem;color:#e0e0f0">Match Chat</div>
+    <div id="matchChatMessages" style="max-height:260px;overflow-y:auto;margin-bottom:0.75rem;display:flex;flex-direction:column;gap:0.4rem">
+      ${renderChatMessages(match.messages || [])}
+    </div>
+    ${match.status !== 'completed' ? `<div style="display:flex;gap:0.5rem">
+      <input id="matchChatInput" type="text" placeholder="Send a message..." maxlength="500"
+        style="flex:1;padding:0.4rem 0.7rem;background:#1a1a2e;border:1px solid #333;border-radius:6px;color:#e0e0f0;font-size:0.875rem"
+        onkeydown="if(event.key==='Enter')sendMatchChat(${match.id})" />
+      <button class="btn btn-ghost btn-sm" onclick="sendMatchChat(${match.id})">Send</button>
+    </div>` : ''}
+  </div>`;
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-bottom:1.5rem">
+      <div>
+        <div style="font-size:0.75rem;color:#888;margin-bottom:0.25rem">Match #${match.id}</div>
+        <h2 style="margin:0;font-size:1.5rem;font-weight:800;color:#e0e0f0">Active Match</h2>
+        <div style="font-size:0.875rem;color:#a0a0b0;margin-top:0.25rem">Games: ${gameIcons}</div>
+      </div>
+      <span style="padding:0.35rem 0.9rem;border-radius:9999px;font-size:0.8rem;font-weight:700;background:${statusColor}22;color:${statusColor};border:1px solid ${statusColor}55">${statusLabel}</span>
+    </div>
+
+    <div class="card" style="padding:1.25rem">
+      <div style="display:flex;gap:2rem;flex-wrap:wrap">
+        ${renderTeam(match.participants_a, 'Team A')}
+        <div style="display:flex;align-items:center;font-size:1.5rem;font-weight:800;color:#555;padding:0 0.5rem">vs</div>
+        ${renderTeam(match.participants_b, 'Team B')}
+      </div>
+    </div>
+
+    ${scoreSection}
+    ${chatHtml}
+
+    <!-- Dispute Modal -->
+    <div id="disputeModalInline" style="display:none;margin-top:1rem;padding:1.25rem;background:#1a1a2e;border:1px solid #333;border-radius:12px">
+      <div style="font-weight:700;color:#e0e0f0;margin-bottom:0.75rem">File / Update Dispute</div>
+      <textarea id="disputeReason" placeholder="Describe the issue..." rows="3"
+        style="width:100%;padding:0.5rem;background:#0e0e1a;border:1px solid #333;border-radius:6px;color:#e0e0f0;font-size:0.875rem;resize:vertical;margin-bottom:0.5rem"></textarea>
+      <input id="disputeEvidence" type="url" placeholder="Evidence URL (screenshot, video, etc.) — optional"
+        style="width:100%;padding:0.4rem 0.6rem;background:#0e0e1a;border:1px solid #333;border-radius:6px;color:#e0e0f0;font-size:0.875rem;margin-bottom:0.75rem" />
+      <div style="display:flex;gap:0.5rem">
+        <button class="btn btn-sm" style="background:#7c0e1a;color:#fca5a5;border:none" onclick="submitDispute(${match.id})">Submit Dispute</button>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('disputeModalInline').style.display='none'">Cancel</button>
+      </div>
+      <div id="disputeError" class="error-msg" style="display:none;margin-top:0.5rem"></div>
+    </div>
+  `;
+
+  scrollChatToBottom();
+}
+
+function renderChatMessages(messages) {
+  if (!messages.length) return '<p style="color:#555;font-size:0.8rem;text-align:center">No messages yet.</p>';
+  return messages.map(m => {
+    const isMe = m.user_id === currentUser.id;
+    const initials = (m.gamertag || m.username || '?')[0].toUpperCase();
+    return `<div style="display:flex;align-items:flex-start;gap:0.5rem;${isMe ? 'flex-direction:row-reverse' : ''}">
+      <div style="width:1.5rem;height:1.5rem;border-radius:50%;background:${escapeHtml(m.avatar_color||'#6366f1')};display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:700;color:#fff;flex-shrink:0">${initials}</div>
+      <div style="max-width:70%;padding:0.35rem 0.65rem;border-radius:10px;background:${isMe ? '#2d2d6e' : '#1e1e35'};color:#e0e0f0;font-size:0.825rem">${escapeHtml(m.message)}</div>
+    </div>`;
+  }).join('');
+}
+
+function scrollChatToBottom() {
+  const c = document.getElementById('matchChatMessages');
+  if (c) c.scrollTop = c.scrollHeight;
+}
+
+async function pollMatchMessages(matchId) {
+  try {
+    const msgs = await api.matches.getMessages(matchId, _matchLastMsgTime);
+    if (!msgs.length) return;
+    _matchLastMsgTime = msgs[msgs.length - 1].created_at;
+    const c = document.getElementById('matchChatMessages');
+    if (!c) return;
+    const atBottom = c.scrollHeight - c.scrollTop <= c.clientHeight + 10;
+    c.insertAdjacentHTML('beforeend', renderChatMessages(msgs));
+    if (atBottom) scrollChatToBottom();
+  } catch {}
+}
+
+async function submitMatchReport(matchId) {
+  const input = document.getElementById('matchWinsInput');
+  const wins = parseInt(input?.value);
+  if (isNaN(wins) || wins < 0) { showToast('Enter a valid number of wins.', 'error'); return; }
+  try {
+    const res = await api.matches.report(matchId, { rounds_won: wins });
+    showToast(res.message || 'Score reported!', res.status === 'disputed' ? 'error' : 'success');
+    const match = await api.matches.get(matchId);
+    renderMatch(match);
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function confirmMatchScore(matchId) {
+  try {
+    const res = await api.matches.confirm(matchId);
+    showToast(res.message || 'Score confirmed!', 'success');
+    const match = await api.matches.get(matchId);
+    renderMatch(match);
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+function openDisputeModal(matchId) {
+  document.getElementById('disputeModalInline').style.display = '';
+}
+
+async function submitDispute(matchId) {
+  const reason = document.getElementById('disputeReason').value.trim();
+  const evidence_url = document.getElementById('disputeEvidence').value.trim();
+  if (!reason) { showError('disputeError', 'Please provide a reason.'); return; }
+  hideError('disputeError');
+  try {
+    const res = await api.matches.dispute(matchId, { reason, evidence_url: evidence_url || undefined });
+    showToast(res.message || 'Dispute submitted.', 'success');
+    document.getElementById('disputeModalInline').style.display = 'none';
+    const match = await api.matches.get(matchId);
+    renderMatch(match);
+  } catch (err) {
+    showError('disputeError', err.message);
+  }
+}
+
+async function sendMatchChat(matchId) {
+  const input = document.getElementById('matchChatInput');
+  const message = input?.value.trim();
+  if (!message) return;
+  input.value = '';
+  try {
+    const msg = await api.matches.sendMessage(matchId, { message });
+    _matchLastMsgTime = msg.created_at;
+    const c = document.getElementById('matchChatMessages');
+    if (c) {
+      c.insertAdjacentHTML('beforeend', renderChatMessages([msg]));
+      scrollChatToBottom();
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+// ===== TOURNAMENTS =====
+
+let _currentTournamentId = null;
+
+async function loadClubTournaments(clubId) {
+  const el = document.getElementById('clubTournamentsList');
+  if (!el) return;
+  try {
+    const tournaments = await api.tournaments.forClub(clubId);
+    if (!tournaments.length) {
+      el.innerHTML = '<p class="text-muted" style="font-size:0.875rem">No tournaments yet.</p>';
+      return;
+    }
+    el.innerHTML = tournaments.map(t => {
+      const statusColor = { active: '#10b981', completed: '#f59e0b', pending: '#6366f1' }[t.status] || '#888';
+      const statusLabel = { active: 'In Progress', completed: 'Completed', pending: 'Pending' }[t.status] || t.status;
+      const winnerText = t.status === 'completed' && t.winner_gamertag
+        ? `<div style="font-size:0.78rem;color:#fbbf24;margin-top:0.2rem">🏆 ${escapeHtml(t.winner_gamertag || t.winner_username)}</div>`
+        : '';
+      return `<div class="challenge-card" style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:700">${escapeHtml(t.name)}</div>
+          <div style="font-size:0.8rem;color:var(--text-2)">${t.game_icon} ${escapeHtml(t.game_name)} · Best of ${t.games_per_round}</div>
+          ${winnerText}
+        </div>
+        <div style="display:flex;align-items:center;gap:0.75rem">
+          <span style="padding:0.2rem 0.6rem;border-radius:9999px;font-size:0.75rem;font-weight:700;background:${statusColor}22;color:${statusColor};border:1px solid ${statusColor}55">${statusLabel}</span>
+          <button class="btn btn-ghost btn-sm" onclick="openTournamentBracket(${t.id})">View Bracket</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch {
+    el.innerHTML = '<p class="text-muted">Failed to load tournaments.</p>';
+  }
+}
+
+async function openCreateTournamentModal() {
+  if (!currentUser) return;
+  const club = await api.clubs.get(userClubId).catch(() => null);
+  if (!club) return;
+
+  // Populate game dropdown
+  const games = await api.games.list().catch(() => []);
+  const gameSelect = document.getElementById('tournamentGame');
+  gameSelect.innerHTML = games.map(g => `<option value="${g.id}">${g.icon} ${escapeHtml(g.name)}</option>`).join('');
+
+  // Populate member checkboxes
+  const cbContainer = document.getElementById('tournamentMemberCheckboxes');
+  cbContainer.innerHTML = club.members.map(m => `
+    <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;padding:0.2rem 0.1rem;cursor:pointer">
+      <input type="checkbox" class="tournament-member-cb" value="${m.id}" onchange="updateTournamentParticipantCount()">
+      <div class="avatar-sm" style="background:${m.avatar_color || '#6366f1'};width:20px;height:20px;font-size:0.65rem;flex-shrink:0">${(m.gamertag || m.username)[0].toUpperCase()}</div>
+      ${escapeHtml(m.gamertag || m.username)}
+    </label>
+  `).join('');
+
+  document.getElementById('tournamentName').value = '';
+  document.getElementById('tournamentParticipantCount').textContent = '';
+  document.getElementById('manualSeedOrder').style.display = 'none';
+  document.getElementById('createTournamentError').style.display = 'none';
+  document.getElementById('tournamentSeeding').onchange = updateManualSeedUI;
+
+  openModal('createTournamentModal');
+}
+
+function updateTournamentParticipantCount() {
+  const checked = document.querySelectorAll('.tournament-member-cb:checked').length;
+  document.getElementById('tournamentParticipantCount').textContent = `(${checked} selected)`;
+  if (document.getElementById('tournamentSeeding').value === 'manual') updateManualSeedList();
+}
+
+function updateManualSeedUI() {
+  const isManual = document.getElementById('tournamentSeeding').value === 'manual';
+  document.getElementById('manualSeedOrder').style.display = isManual ? '' : 'none';
+  if (isManual) updateManualSeedList();
+}
+
+function updateManualSeedList() {
+  const checked = [...document.querySelectorAll('.tournament-member-cb:checked')];
+  const list = document.getElementById('manualSeedList');
+  // Preserve existing order if items match
+  const existing = [...list.querySelectorAll('[data-uid]')].map(el => el.dataset.uid);
+  const checkedIds = checked.map(cb => cb.value);
+  // Add new items, keep existing order
+  const orderedIds = [...existing.filter(id => checkedIds.includes(id)), ...checkedIds.filter(id => !existing.includes(id))];
+  list.innerHTML = orderedIds.map((uid, i) => {
+    const cb = document.querySelector(`.tournament-member-cb[value="${uid}"]`);
+    const label = cb ? cb.closest('label').textContent.trim() : uid;
+    return `<div class="seed-row" data-uid="${uid}" draggable="true"
+      ondragstart="seedDragStart(event)" ondragover="seedDragOver(event)" ondrop="seedDrop(event)"
+      style="display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0.5rem;background:var(--bg-3);border-radius:var(--radius-sm);cursor:grab">
+      <span style="font-size:0.75rem;color:var(--text-3);width:18px;text-align:right">#${i + 1}</span>
+      <span style="font-size:0.82rem">${escapeHtml(label)}</span>
+    </div>`;
+  }).join('');
+}
+
+function seedDragStart(e) { e.dataTransfer.setData('text/plain', e.currentTarget.dataset.uid); }
+function seedDragOver(e) { e.preventDefault(); }
+function seedDrop(e) {
+  e.preventDefault();
+  const draggedUid = e.dataTransfer.getData('text/plain');
+  const target = e.currentTarget;
+  if (target.dataset.uid === draggedUid) return;
+  const list = document.getElementById('manualSeedList');
+  const draggedEl = list.querySelector(`[data-uid="${draggedUid}"]`);
+  list.insertBefore(draggedEl, target);
+  updateManualSeedList();
+}
+
+async function submitCreateTournament() {
+  const name = document.getElementById('tournamentName').value.trim();
+  const gameId = document.getElementById('tournamentGame').value;
+  const gpr = document.getElementById('tournamentGPR').value;
+  const seeding = document.getElementById('tournamentSeeding').value;
+  const errEl = document.getElementById('createTournamentError');
+
+  if (!name) { errEl.textContent = 'Please enter a tournament name.'; errEl.style.display = ''; return; }
+
+  let participantIds;
+  if (seeding === 'manual') {
+    participantIds = [...document.querySelectorAll('#manualSeedList [data-uid]')].map(el => Number(el.dataset.uid));
+  } else {
+    participantIds = [...document.querySelectorAll('.tournament-member-cb:checked')].map(cb => Number(cb.value));
+  }
+  if (participantIds.length < 2) { errEl.textContent = 'Select at least 2 participants.'; errEl.style.display = ''; return; }
+
+  errEl.style.display = 'none';
+  try {
+    await api.tournaments.create({ club_id: userClubId, name, game_id: gameId, games_per_round: gpr, seeding, participant_ids: participantIds });
+    showToast('Tournament created!', 'success');
+    closeAllModals();
+    await loadClubTournaments(userClubId);
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.style.display = '';
+  }
+}
+
+async function openTournamentBracket(id) {
+  _currentTournamentId = id;
+  try {
+    const t = await api.tournaments.get(id);
+    renderBracketModal(t);
+    openModal('tournamentBracketModal');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+function renderBracketModal(t) {
+  const isOwner = userClubId && t.created_by === currentUser.id || (currentUser && t.club && t.club.owner_id === currentUser.id);
+  const canManage = currentUser && t.created_by === currentUser.id;
+
+  document.getElementById('bracketModalTitle').textContent = `${t.game ? t.game.icon : '🏆'} ${escapeHtml(t.name)}`;
+
+  const cancelBtn = document.getElementById('cancelTournamentBtn');
+  if (cancelBtn) cancelBtn.style.display = canManage && t.status === 'active' ? '' : 'none';
+
+  // Winner banner
+  const banner = document.getElementById('bracketWinnerBanner');
+  const winnerName = document.getElementById('bracketWinnerName');
+  if (t.status === 'completed' && t.winner) {
+    banner.style.display = '';
+    winnerName.textContent = `🏆 ${t.winner.gamertag || t.winner.username}`;
+  } else {
+    banner.style.display = 'none';
+  }
+
+  // Group matches by round
+  const maxRound = Math.max(...t.matches.map(m => m.round), 1);
+  const rounds = [];
+  for (let r = 1; r <= maxRound; r++) {
+    rounds.push(t.matches.filter(m => m.round === r).sort((a, b) => a.match_index - b.match_index));
+  }
+
+  const roundLabels = getRoundLabels(maxRound);
+
+  const html = `<div class="bracket-wrapper">
+    ${rounds.map((rMatches, ri) => `
+      <div class="bracket-round">
+        <div class="bracket-round-label">${roundLabels[ri]}</div>
+        <div class="bracket-matches">
+          ${rMatches.map(m => renderBracketMatch(m, t, canManage)).join('')}
+        </div>
+      </div>
+    `).join('')}
+  </div>`;
+
+  document.getElementById('bracketContainer').innerHTML = html;
+}
+
+function getRoundLabels(maxRound) {
+  const labels = [];
+  for (let r = 1; r <= maxRound; r++) {
+    const fromEnd = maxRound - r;
+    if (fromEnd === 0) labels.push('Final');
+    else if (fromEnd === 1) labels.push('Semifinal');
+    else if (fromEnd === 2) labels.push('Quarterfinal');
+    else labels.push(`Round ${r}`);
+  }
+  return labels;
+}
+
+function renderBracketMatch(m, t, canManage) {
+  const playerName = (p) => p ? escapeHtml(p.gamertag || p.username) : '<span style="color:var(--text-3);font-style:italic">TBD</span>';
+  const isWinnerA = m.winner_id && m.player_a_id && m.winner_id === m.player_a_id;
+  const isWinnerB = m.winner_id && m.player_b_id && m.winner_id === m.player_b_id;
+  const isPending = m.status === 'pending' && m.player_a_id && m.player_b_id;
+  const isBye = m.status === 'bye';
+
+  const rowStyle = (isWinner) => isWinner ? 'background:var(--bg-3);font-weight:700;color:#fbbf24' : 'background:var(--bg-2)';
+
+  return `<div class="bracket-match ${isBye ? 'bracket-match-bye' : ''}">
+    <div class="bracket-player" style="${rowStyle(isWinnerA)}">
+      ${isWinnerA ? '🏆 ' : ''}${playerName(m.player_a)}
+    </div>
+    <div class="bracket-player" style="${rowStyle(isWinnerB)}">
+      ${isWinnerB ? '🏆 ' : ''}${playerName(m.player_b)}
+      ${isBye ? '<span style="font-size:0.68rem;color:var(--text-3);margin-left:0.25rem">(bye)</span>' : ''}
+    </div>
+    ${isPending && canManage && t.status === 'active' ? `
+    <div class="bracket-set-winner">
+      <button class="btn btn-ghost btn-sm" style="font-size:0.72rem;padding:0.2rem 0.5rem" onclick="promptSetWinner(${t.id}, ${m.id}, ${m.player_a_id}, '${escapeHtml(m.player_a ? (m.player_a.gamertag || m.player_a.username) : '')}', ${m.player_b_id}, '${escapeHtml(m.player_b ? (m.player_b.gamertag || m.player_b.username) : '')}')">Set Winner</button>
+    </div>` : ''}
+  </div>`;
+}
+
+function promptSetWinner(tId, matchId, pAId, pAName, pBId, pBName) {
+  // Simple inline prompt using a small overlay inside the bracket modal
+  const existing = document.getElementById('setWinnerPrompt');
+  if (existing) existing.remove();
+
+  const div = document.createElement('div');
+  div.id = 'setWinnerPrompt';
+  div.style.cssText = 'position:fixed;inset:0;background:#0009;display:flex;align-items:center;justify-content:center;z-index:9999';
+  div.innerHTML = `
+    <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;max-width:320px;width:90%;text-align:center">
+      <div style="font-weight:700;font-size:1rem;margin-bottom:1rem">Who won this match?</div>
+      <div style="display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="confirmSetWinner(${tId},${matchId},${pAId})">${escapeHtml(pAName)}</button>
+        <button class="btn btn-primary" onclick="confirmSetWinner(${tId},${matchId},${pBId})">${escapeHtml(pBName)}</button>
+      </div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:1rem" onclick="document.getElementById('setWinnerPrompt').remove()">Cancel</button>
+    </div>`;
+  document.body.appendChild(div);
+}
+
+async function confirmSetWinner(tId, matchId, winnerId) {
+  const prompt = document.getElementById('setWinnerPrompt');
+  if (prompt) prompt.remove();
+  try {
+    const t = await api.tournaments.setWinner(tId, matchId, { winner_id: winnerId });
+    renderBracketModal(t);
+    if (t.status === 'completed') {
+      showToast(`🏆 ${t.winner ? (t.winner.gamertag || t.winner.username) : 'Unknown'} wins the tournament!`, 'success');
+      await loadClubTournaments(userClubId);
+      await renderMyClub(userClubId);
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function cancelTournament() {
+  if (!_currentTournamentId) return;
+  if (!confirm('Cancel this tournament? This cannot be undone.')) return;
+  try {
+    await api.tournaments.cancel(_currentTournamentId);
+    showToast('Tournament cancelled.', 'success');
+    closeAllModals();
+    await loadClubTournaments(userClubId);
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
 }
