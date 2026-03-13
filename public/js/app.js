@@ -32,12 +32,21 @@ const routes = {
   '/dashboard': 'dashboard', '/games': 'games', '/clubs': 'clubs',
   '/leaderboard': 'leaderboard', '/profile': 'profile',
   '/teams': 'teams', '/match': 'match',
+  '/verify-email': 'verify-email',
 };
 
 function route() {
   const full = location.hash.slice(1) || '/';
-  const hash = full.split('?')[0];
+  const [hash, qs] = full.split('?');
   const page = routes[hash] || 'landing';
+
+  // Verify-email page is always accessible
+  if (page === 'verify-email') {
+    showPage('verify-email');
+    const params = new URLSearchParams(qs || '');
+    handleEmailVerification(params.get('token'));
+    return;
+  }
 
   if (!currentUser && !['landing','login','register'].includes(page)) {
     location.hash = '#/login';
@@ -86,7 +95,8 @@ function updateNavActive(page) {
 
   const navbar = document.getElementById('navbar');
   const navUser = document.getElementById('navUser');
-  const showNav = currentUser && !['landing','login','register'].includes(page);
+  const noNavPages = ['landing','login','register','verify-email'];
+  const showNav = currentUser && !noNavPages.includes(page);
   navbar.style.display = showNav ? '' : 'none';
   navUser.style.display = currentUser ? '' : 'none';
 }
@@ -100,6 +110,16 @@ async function loadPage(page) {
     case 'profile': await loadProfile(); break;
     case 'teams': await loadTeamsPage(); break;
     case 'match': await loadMatchPage(); break;
+    case 'register':
+      // Reset form state when navigating to register
+      document.getElementById('registerForm').style.display = '';
+      document.getElementById('registerSuccess').style.display = 'none';
+      hideError('registerError');
+      break;
+    case 'login':
+      document.getElementById('loginVerifyNotice').style.display = 'none';
+      hideError('loginError');
+      break;
   }
 }
 
@@ -138,11 +158,14 @@ document.addEventListener('click', (e) => {
 });
 
 // ===== AUTH =====
+let _pendingVerifyEmail = null;
+
 async function handleLogin(e) {
   e.preventDefault();
   const btn = document.getElementById('loginBtn');
   btn.disabled = true; btn.textContent = 'Signing in...';
   hideError('loginError');
+  document.getElementById('loginVerifyNotice').style.display = 'none';
   try {
     const data = await api.auth.login({
       email: document.getElementById('loginEmail').value,
@@ -154,33 +177,120 @@ async function handleLogin(e) {
     updateNavUser();
     location.hash = '#/dashboard';
   } catch (err) {
-    showError('loginError', err.message);
+    // Special case: account not yet verified
+    if (err.message && err.message.includes('verify your email')) {
+      _pendingVerifyEmail = document.getElementById('loginEmail').value;
+      document.getElementById('loginVerifyMsg').textContent = err.message;
+      document.getElementById('loginVerifyNotice').style.display = 'block';
+      document.getElementById('loginResendMsg').style.display = 'none';
+    } else {
+      showError('loginError', err.message);
+    }
   } finally {
     btn.disabled = false; btn.textContent = 'Sign In';
+  }
+}
+
+async function resendVerificationFromLogin() {
+  if (!_pendingVerifyEmail) return;
+  try {
+    await api.auth.resendVerification(_pendingVerifyEmail);
+    const el = document.getElementById('loginResendMsg');
+    el.textContent = 'Verification email resent! Check your inbox.';
+    el.style.display = 'block';
+  } catch (err) {
+    const el = document.getElementById('loginResendMsg');
+    el.textContent = err.message;
+    el.style.color = 'var(--red)';
+    el.style.display = 'block';
   }
 }
 
 async function handleRegister(e) {
   e.preventDefault();
   const btn = document.getElementById('registerBtn');
+  const password = document.getElementById('regPassword').value;
+  const confirm = document.getElementById('regPasswordConfirm').value;
+
+  if (password !== confirm) {
+    showError('registerError', 'Passwords do not match.');
+    return;
+  }
+
   btn.disabled = true; btn.textContent = 'Creating account...';
   hideError('registerError');
   try {
     const data = await api.auth.register({
       username: document.getElementById('regUsername').value,
       email: document.getElementById('regEmail').value,
-      password: document.getElementById('regPassword').value,
+      password,
       gamertag: document.getElementById('regGamertag').value || undefined,
     });
-    localStorage.setItem('token', data.token);
-    currentUser = data.user;
-    allGames = await api.games.list();
-    updateNavUser();
-    location.hash = '#/dashboard';
+
+    if (data.pending_verification) {
+      // Hide form, show check-email notice
+      document.getElementById('registerForm').style.display = 'none';
+      _pendingVerifyEmail = data.email;
+      const notice = document.getElementById('registerSuccess');
+      document.getElementById('registerSuccessEmail').textContent =
+        `We sent a verification link to ${data.email}. Click the link in that email to activate your account.`;
+      notice.style.display = 'block';
+    }
   } catch (err) {
     showError('registerError', err.message);
   } finally {
     btn.disabled = false; btn.textContent = 'Create Account';
+  }
+}
+
+async function resendVerification() {
+  if (!_pendingVerifyEmail) return;
+  try {
+    await api.auth.resendVerification(_pendingVerifyEmail);
+    const el = document.getElementById('resendMsg');
+    el.textContent = 'Email resent! Check your inbox.';
+    el.style.color = 'var(--neon-green)';
+    el.style.display = 'block';
+  } catch (err) {
+    const el = document.getElementById('resendMsg');
+    el.textContent = err.message;
+    el.style.color = 'var(--red)';
+    el.style.display = 'block';
+  }
+}
+
+async function handleEmailVerification(token) {
+  const content = document.getElementById('verifyEmailContent');
+  if (!token) {
+    content.innerHTML = `<div style="font-size:2rem;margin-bottom:1rem">❌</div>
+      <h3 style="margin-bottom:0.5rem">Invalid Link</h3>
+      <p style="color:var(--text-2)">No verification token found in this link.</p>
+      <a href="#/register" class="btn btn-primary btn-sm" style="margin-top:1.25rem;display:inline-flex">Back to Register</a>`;
+    return;
+  }
+  try {
+    const data = await api.auth.verifyEmail(token);
+    if (data.already_verified) {
+      content.innerHTML = `<div style="font-size:2rem;margin-bottom:1rem">✅</div>
+        <h3 style="margin-bottom:0.5rem">Already Verified</h3>
+        <p style="color:var(--text-2)">This account is already active.</p>
+        <a href="#/login" class="btn btn-primary btn-sm" style="margin-top:1.25rem;display:inline-flex">Sign In</a>`;
+      return;
+    }
+    // Successful verification — auto-login
+    localStorage.setItem('token', data.token);
+    currentUser = data.user;
+    allGames = await api.games.list();
+    updateNavUser();
+    content.innerHTML = `<div style="font-size:2rem;margin-bottom:1rem">🎉</div>
+      <h3 style="margin-bottom:0.5rem">Account Activated!</h3>
+      <p style="color:var(--text-2)">Welcome to 5-STACK, ${currentUser.gamertag || currentUser.username}!<br>Redirecting you to your dashboard…</p>`;
+    setTimeout(() => { location.hash = '#/dashboard'; }, 1800);
+  } catch (err) {
+    content.innerHTML = `<div style="font-size:2rem;margin-bottom:1rem">❌</div>
+      <h3 style="margin-bottom:0.5rem">Verification Failed</h3>
+      <p style="color:var(--text-2);margin-bottom:1rem">${err.message}</p>
+      <a href="#/register" class="btn btn-primary btn-sm" style="display:inline-flex">Back to Register</a>`;
   }
 }
 

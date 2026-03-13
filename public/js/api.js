@@ -19,6 +19,8 @@ const api = {
   auth: {
     register: (body) => req('POST', '/api/auth/register', body),
     login: (body) => req('POST', '/api/auth/login', body),
+    verifyEmail: (token) => req('GET', `/api/auth/verify-email?token=${encodeURIComponent(token)}`),
+    resendVerification: (email) => req('POST', '/api/auth/resend-verification', { email }),
   },
   users: {
     me: () => req('GET', '/api/users/me'),

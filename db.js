@@ -239,6 +239,9 @@ if (!userCols.includes('banner_color')) db.exec("ALTER TABLE users ADD COLUMN ba
 if (!userCols.includes('avatar_url')) db.exec("ALTER TABLE users ADD COLUMN avatar_url TEXT");
 if (!userCols.includes('social_links')) db.exec("ALTER TABLE users ADD COLUMN social_links TEXT DEFAULT '{}'");
 if (!userCols.includes('title')) db.exec("ALTER TABLE users ADD COLUMN title TEXT");
+if (!userCols.includes('email_verified')) db.exec('ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0');
+if (!userCols.includes('verification_token')) db.exec('ALTER TABLE users ADD COLUMN verification_token TEXT');
+if (!userCols.includes('verification_token_expires')) db.exec('ALTER TABLE users ADD COLUMN verification_token_expires DATETIME');
 
 const acctCols = db.pragma('table_info(connected_accounts)').map(c => c.name);
 if (!acctCols.includes('tracker_url')) db.exec('ALTER TABLE connected_accounts ADD COLUMN tracker_url TEXT');
