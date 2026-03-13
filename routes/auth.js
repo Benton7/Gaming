@@ -4,7 +4,10 @@ const jwt = require('jsonwebtoken');
 const { db } = require('../db');
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'gaming-platform-secret-key-2024';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET is required');
+}
 
 router.post('/register', async (req, res) => {
   const { username, email, password, gamertag } = req.body;

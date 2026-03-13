@@ -134,22 +134,21 @@ a:hover { color: var(--accent-hover); }
   height: 100%;
   display: flex; align-items: center; gap: 2rem;
 }
-.nav-brand {
-  font-weight: 800; font-size: 1.15rem;
-  color: var(--text) !important;
-  display: flex; align-items: center; gap: 0.5rem;
-  text-decoration: none;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+.brand-icon {
+  height: 5px !important;
+  width: 5px !important;
+  border: 2px solid red !important;
 }
+
+.brand-text-img {
+  height: 5px !important;
+  width: 5px !important;
+  border: 2px solid lime !important;
+}
+
 .nav-brand:hover { color: var(--accent-hover) !important; }
-.brand-icon { font-size: 1.4rem; }
-.brand-text {
-  background: linear-gradient(135deg, #fff 0%, var(--accent-hover) 50%, var(--neon-cyan) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
+
+
 .nav-links { display: flex; gap: 0.25rem; flex: 1; }
 .nav-link {
   padding: 0.4rem 0.85rem;
