@@ -46,72 +46,198 @@
   <!-- LANDING -->
   <section id="page-landing" class="page page-landing">
     <div class="landing-bg"></div>
+    <div class="landing-orb landing-orb-1"></div>
+    <div class="landing-orb landing-orb-2"></div>
+    <div class="landing-orb landing-orb-3"></div>
+
     <div class="landing-content">
       <div class="landing-hero">
-        <div class="hero-badge">◈ Your Gaming Identity, United</div>
-        <h1 class="hero-title">All Your Ranks.<br><span class="gradient-text">One Platform.</span></h1>
-        <p class="hero-subtitle">Connect accounts from Valorant, CS2, Rocket League, Fortnite and more. Track your current &amp; peak ranks, link your tracker.gg profile, earn a Gamerscore, and compete in Clubs.</p>
+        <div class="hero-logo">
+          <img src="images/5-stack-icon.png" alt="5-Stack icon" class="hero-logo-icon">
+          <img src="images/5-stack-text.png" alt="5-STACK" class="hero-logo-text">
+        </div>
+        <div class="hero-badge">◈ The Competitive Gaming Platform</div>
+        <h1 class="hero-title">Compete. Rank.<br><span class="gradient-text">Dominate.</span></h1>
+        <p class="hero-subtitle">Earn real ELO from competitive matches, connect all your game accounts, form clubs, battle in tournaments, and claim your spot on the global leaderboard.</p>
         <div class="hero-actions">
           <a class="btn btn-primary btn-lg" href="#/register">Get Started Free</a>
           <a class="btn btn-ghost btn-lg" href="#/login">Sign In</a>
         </div>
+        <div class="hero-stat-pills">
+          <div class="stat-pill">
+            <span class="stat-pill-value">18+</span>
+            <span class="stat-pill-label">Games</span>
+          </div>
+          <div class="stat-pill stat-pill-cyan">
+            <span class="stat-pill-value">ELO</span>
+            <span class="stat-pill-label">Ranked</span>
+          </div>
+          <div class="stat-pill stat-pill-pink">
+            <span class="stat-pill-value">Club</span>
+            <span class="stat-pill-label">Wars</span>
+          </div>
+          <div class="stat-pill stat-pill-gold">
+            <span class="stat-pill-value">Brackets</span>
+            <span class="stat-pill-label">Tournaments</span>
+          </div>
+        </div>
       </div>
+
       <div class="hero-card-preview">
         <div class="preview-card">
-          <div class="preview-gs">
-            <span class="preview-gs-label">◈ Gamerscore</span>
-            <span class="preview-gs-value">12,480</span>
+          <div class="preview-elo-header">
+            <div>
+              <span class="preview-gs-label">◈ ELO RATING</span>
+              <span class="preview-gs-value">1,847</span>
+            </div>
+            <div class="preview-elo-rank-badge">◈ Master</div>
           </div>
           <div class="preview-games">
             <div class="preview-game"><span>🎯</span><span>Valorant</span><span class="preview-rank" style="color:#818cf8">Diamond 2</span></div>
             <div class="preview-game"><span>🚀</span><span>Rocket League</span><span class="preview-rank" style="color:#ef4444">Champion III</span></div>
             <div class="preview-game"><span>💣</span><span>CS2</span><span class="preview-rank" style="color:#818cf8">Legendary Eagle</span></div>
-            <div class="preview-game"><span>🏗️</span><span>Fortnite</span><span class="preview-rank" style="color:#fbbf24">Champion</span></div>
+            <div class="preview-game"><span>🏈</span><span>Madden NFL 25</span><span class="preview-rank" style="color:#fbbf24">Competitive</span></div>
           </div>
+          <div class="preview-club-strip">
+            <span class="preview-club-tag">[NOVA]</span>
+            <span class="preview-club-name">Nova Esports</span>
+            <span class="preview-club-elo">Club ELO 1,720</span>
+          </div>
+        </div>
+
+        <!-- Floating graphic badges -->
+        <div class="preview-float preview-float-1">
+          <span class="pf-icon">🏆</span>
+          <span class="pf-label">Tournament<br>Champion</span>
+        </div>
+        <div class="preview-float preview-float-2">
+          <span class="pf-icon">⚔️</span>
+          <span class="pf-label">Active<br>Challenge</span>
         </div>
       </div>
     </div>
+
+    <!-- Platform at a glance strip -->
+    <div class="platform-strip">
+      <div class="platform-strip-inner">
+        <div class="platform-stat">
+          <span class="ps-icon">🎮</span>
+          <span class="ps-value">18+</span>
+          <span class="ps-label">Supported Games</span>
+        </div>
+        <div class="platform-strip-divider"></div>
+        <div class="platform-stat">
+          <span class="ps-icon">◈</span>
+          <span class="ps-value">ELO</span>
+          <span class="ps-label">Skill Rating System</span>
+        </div>
+        <div class="platform-strip-divider"></div>
+        <div class="platform-stat">
+          <span class="ps-icon">⚔️</span>
+          <span class="ps-value">Clubs</span>
+          <span class="ps-label">Challenge &amp; Compete</span>
+        </div>
+        <div class="platform-strip-divider"></div>
+        <div class="platform-stat">
+          <span class="ps-icon">🏆</span>
+          <span class="ps-value">Brackets</span>
+          <span class="ps-label">In-Club Tournaments</span>
+        </div>
+        <div class="platform-strip-divider"></div>
+        <div class="platform-stat">
+          <span class="ps-icon">👥</span>
+          <span class="ps-value">Teams</span>
+          <span class="ps-label">Team ELO &amp; Rosters</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Features -->
     <div class="features-section">
-      <h2 class="features-title">Everything in One Place</h2>
+      <h2 class="features-title">Everything You Need to <span class="gradient-text">Compete</span></h2>
       <div class="features-grid">
-        <div class="feature-card">
-          <span class="feature-icon">🏆</span>
-          <h3>Gamerscore</h3>
-          <p>Your ranks across all games combine into a single score — your true measure as a gamer.</p>
+        <div class="feature-card feature-card-accent">
+          <div class="feature-icon-wrap feature-icon-gold">◈</div>
+          <h3>ELO Rating</h3>
+          <p>Earn a real skill rating after 5 competitive matches. Climb from Bronze through Silver, Gold, Platinum, Diamond, Master, and Grandmaster.</p>
         </div>
         <div class="feature-card">
-          <span class="feature-icon">📊</span>
-          <h3>Peak Tracking</h3>
-          <p>See both your current rank and all-time peak. Prove how high you've climbed.</p>
-        </div>
-        <div class="feature-card">
-          <span class="feature-icon">🔗</span>
-          <h3>Tracker.gg Link</h3>
-          <p>Link your tracker.gg profile to display a verified badge next to your stats.</p>
-        </div>
-        <div class="feature-card">
-          <span class="feature-icon">⚔️</span>
+          <div class="feature-icon-wrap">⚔️</div>
           <h3>Club Wars</h3>
-          <p>Form clubs, post open challenges, and compete against rivals for club points.</p>
+          <p>Form or join a club, post open challenges, and issue direct club-vs-club battles. Club ELO rises and falls with every match.</p>
         </div>
         <div class="feature-card">
-          <span class="feature-icon">🌍</span>
-          <h3>Leaderboard</h3>
-          <p>See where you rank globally and compete to reach the top.</p>
+          <div class="feature-icon-wrap feature-icon-cyan">🏆</div>
+          <h3>Tournaments</h3>
+          <p>Club owners can run single-elimination brackets with Best of 1 or Best of 3 formats. Champions earn a permanent badge on the club page.</p>
         </div>
         <div class="feature-card">
-          <span class="feature-icon">🎮</span>
-          <h3>10 Games</h3>
-          <p>Valorant, LoL, CS2, Apex, Rocket League, OW2, R6S, Fortnite, Dota 2, Warzone.</p>
+          <div class="feature-icon-wrap feature-icon-pink">👥</div>
+          <h3>Teams</h3>
+          <p>Build a 5-man roster, earn Team ELO from organized matches, and track wins, losses, and your team's rank against others.</p>
         </div>
+        <div class="feature-card">
+          <div class="feature-icon-wrap">🎮</div>
+          <h3>18+ Games</h3>
+          <p>Esports: Valorant, CS2, Rocket League, Apex, LoL, OW2, R6S, Fortnite, Dota 2, Warzone. Sports: Madden, NBA 2K, EA FC, MLB The Show, NHL, UFC 5 and more.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon-wrap feature-icon-gold">📊</div>
+          <h3>Leaderboards</h3>
+          <p>Global ELO rankings for players, clubs, and teams. See current rank, peak rank, and tracker.gg-verified stats all in one place.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- How It Works -->
+    <div class="how-section">
+      <h2 class="features-title">How It Works</h2>
+      <div class="how-steps">
+        <div class="how-step">
+          <div class="how-step-num">01</div>
+          <div class="how-step-line"></div>
+          <h3>Connect Your Accounts</h3>
+          <p>Enter your in-game usernames and current ranks for any supported title. Link tracker.gg for a verified badge.</p>
+        </div>
+        <div class="how-arrow">→</div>
+        <div class="how-step">
+          <div class="how-step-num">02</div>
+          <div class="how-step-line"></div>
+          <h3>Join a Club or Team</h3>
+          <p>Create or join a club to compete in wars, post open challenges, and run internal tournaments with your crew.</p>
+        </div>
+        <div class="how-arrow">→</div>
+        <div class="how-step">
+          <div class="how-step-num">03</div>
+          <div class="how-step-line"></div>
+          <h3>Earn ELO &amp; Climb</h3>
+          <p>Play 5 matches on any game to unlock your ELO rating. Win matches, climb the global leaderboard, and earn your rank.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- CTA Footer -->
+    <div class="landing-cta-footer">
+      <div class="landing-cta-inner">
+        <img src="images/5-stack-icon.png" alt="" class="cta-logo-icon">
+        <div>
+          <h2 class="cta-headline">Ready to prove your rank?</h2>
+          <p class="cta-sub">Free to join. No downloads. Just compete.</p>
+        </div>
+        <a class="btn btn-primary btn-lg" href="#/register">Create Free Account</a>
       </div>
     </div>
   </section>
 
   <!-- LOGIN -->
   <section id="page-login" class="page page-auth">
+    <div class="auth-bg-orb auth-bg-orb-1"></div>
+    <div class="auth-bg-orb auth-bg-orb-2"></div>
     <div class="auth-card">
-      <div class="auth-logo">⬡ 5-STACK</div>
+      <div class="auth-logo">
+        <img src="images/5-stack-icon.png" alt="5-Stack" class="auth-logo-icon">
+        <img src="images/5-stack-text.png" alt="5-STACK" class="auth-logo-text">
+      </div>
       <h2 class="auth-title">Welcome Back</h2>
       <p class="auth-sub">Sign in to your account</p>
       <div id="loginError" class="alert alert-error" style="display:none"></div>
@@ -132,10 +258,15 @@
 
   <!-- REGISTER -->
   <section id="page-register" class="page page-auth">
+    <div class="auth-bg-orb auth-bg-orb-1"></div>
+    <div class="auth-bg-orb auth-bg-orb-2"></div>
     <div class="auth-card">
-      <div class="auth-logo">⬡ GamerHub</div>
-      <h2 class="auth-title">Join GamerHub</h2>
-      <p class="auth-sub">Create your gaming identity</p>
+      <div class="auth-logo">
+        <img src="images/5-stack-icon.png" alt="5-Stack" class="auth-logo-icon">
+        <img src="images/5-stack-text.png" alt="5-STACK" class="auth-logo-text">
+      </div>
+      <h2 class="auth-title">Join 5-STACK</h2>
+      <p class="auth-sub">Create your competitive gaming identity</p>
       <div id="registerError" class="alert alert-error" style="display:none"></div>
       <form id="registerForm" onsubmit="handleRegister(event)">
         <div class="form-group">
