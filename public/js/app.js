@@ -2394,7 +2394,7 @@ async function openCreateTournamentModal() {
   document.getElementById('createTournamentError').style.display = 'none';
   document.getElementById('tournamentSeeding').onchange = updateManualSeedUI;
 
-  showModal('createTournamentModal');
+  openModal('createTournamentModal');
 }
 
 function updateTournamentParticipantCount() {
@@ -2476,7 +2476,7 @@ async function openTournamentBracket(id) {
   try {
     const t = await api.tournaments.get(id);
     renderBracketModal(t);
-    showModal('tournamentBracketModal');
+    openModal('tournamentBracketModal');
   } catch (err) {
     showToast(err.message, 'error');
   }
