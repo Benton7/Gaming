@@ -473,6 +473,8 @@ async function renderMyClub(clubId) {
         </div>
       </div>`;
 
+    await loadActiveMatches('myClubMatches', 'myClubMatchesSection', 'club');
+
     const challengesEl = document.getElementById('myClubChallenges');
     if (!club.challenges || club.challenges.length === 0) {
       challengesEl.innerHTML = '<p class="text-muted" style="font-size:0.9rem;margin-top:0.5rem">No challenges yet.</p>';
@@ -505,6 +507,43 @@ async function renderMyClub(clubId) {
   } catch (err) {
     console.error(err);
   }
+}
+
+function renderActiveMatchCards(matches, type) {
+  if (!matches.length) return '';
+  return matches.map(m => {
+    const statusColor = m.status === 'disputed' ? '#f59e0b' : '#10b981';
+    const statusLabel = m.status === 'disputed' ? 'Disputed' : 'In Progress';
+    const opponentLabel = type === 'club'
+      ? (m.entity_a_label && m.entity_b_label ? `${m.entity_a_label} vs ${m.entity_b_label}` : 'Club Match')
+      : (m.entity_a_label && m.entity_b_label ? `${m.entity_a_label} vs ${m.entity_b_label}` : 'Team Match');
+    const gameIcons = (m.games || []).map(g => `<span title="${escapeHtml(g.name)}">${escapeHtml(g.icon || g.name[0])}</span>`).join(' ');
+    return `<div class="challenge-card" style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+      <div>
+        <div style="font-weight:700;color:#e0e0f0">${escapeHtml(opponentLabel)}</div>
+        <div style="font-size:0.8rem;color:#a0a0b0;margin-top:0.15rem">${gameIcons}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:0.75rem">
+        <span style="padding:0.2rem 0.6rem;border-radius:9999px;font-size:0.75rem;font-weight:700;background:${statusColor}22;color:${statusColor};border:1px solid ${statusColor}55">${statusLabel}</span>
+        <a class="btn btn-primary btn-sm" href="#/match?id=${m.id}">Open Match</a>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function loadActiveMatches(listElId, sectionElId, type) {
+  try {
+    const matches = await api.matches.mine();
+    const filtered = matches.filter(m => m.match_type === type);
+    const section = document.getElementById(sectionElId);
+    const list = document.getElementById(listElId);
+    if (!filtered.length) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = '';
+    list.innerHTML = renderActiveMatchCards(filtered, type);
+  } catch {}
 }
 
 async function loadOpenChallenges() {
@@ -1719,6 +1758,7 @@ async function loadMyTeams() {
     } else {
       invSection.style.display = 'none';
     }
+    await loadActiveMatches('myTeamMatches', 'myTeamMatchesSection', 'team');
   } catch (err) {
     el.innerHTML = '<p class="text-muted">Failed to load teams.</p>';
   }

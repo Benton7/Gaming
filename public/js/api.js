@@ -78,6 +78,7 @@ const api = {
     refresh: (accountId) => req('POST', `/api/verify/refresh/${accountId}`),
   },
   matches: {
+    mine: () => req('GET', '/api/matches/mine'),
     get: (id) => req('GET', `/api/matches/${id}`),
     report: (id, body) => req('POST', `/api/matches/${id}/report`, body),
     confirm: (id) => req('POST', `/api/matches/${id}/confirm`),

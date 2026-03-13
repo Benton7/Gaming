@@ -37,6 +37,29 @@ function enrichMatch(match) {
   return { ...match, games, participants_a, participants_b, participant_a_ids, participant_b_ids, game_ids };
 }
 
+// Get active/disputed matches for the current user
+router.get('/mine', authenticate, (req, res) => {
+  const all = db.prepare(`
+    SELECT * FROM matches
+    WHERE status IN ('active', 'disputed')
+    ORDER BY created_at DESC
+  `).all();
+
+  const mine = all.filter(m => {
+    let pA = [], pB = [];
+    try { pA = JSON.parse(m.participant_a_ids); } catch {}
+    try { pB = JSON.parse(m.participant_b_ids); } catch {}
+    return [...pA, ...pB].includes(req.userId);
+  });
+
+  res.json(mine.map(m => {
+    let game_ids = [];
+    try { game_ids = JSON.parse(m.game_ids); } catch {}
+    const games = game_ids.map(gid => db.prepare('SELECT id, name, icon, slug FROM games WHERE id = ?').get(gid)).filter(Boolean);
+    return { ...m, games };
+  }));
+});
+
 // Get a match by ID
 router.get('/:id', authenticate, (req, res) => {
   const match = db.prepare('SELECT * FROM matches WHERE id = ?').get(req.params.id);
