@@ -9,32 +9,15 @@ const router = express.Router();
 const RIOT_API_KEY = process.env.RIOT_API_KEY || '';
 const CLASH_ROYALE_API_KEY = process.env.CLASH_ROYALE_API_KEY || '';
 
-// ─── TRACKER.GG GAME CONFIG ───────────────────────────────────────────────────
-// trnSlug: the game slug used by tracker.gg API
-// segType: 'overview' or 'playlist' — which segment type has rank data
-// segAttr: for playlist segments, match these attributes
-// rankStat: the stats key that holds current rank info
-// peakStat: the stats key that holds peak rank info (null if none)
-// divStat: a secondary stat to combine with rankStat (e.g., Rocket League tier+division)
-const TRACKER_GG_GAMES = {
-  'fortnite':         { trnSlug: 'fortnite',      segType: 'playlist', segAttr: { playlist: 'ranked-br' }, rankStat: 'rank',       peakStat: null,        divStat: null },
-  'valorant':         { trnSlug: 'valorant',       segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: 'peakRank',  divStat: null },
-  'r6s':              { trnSlug: 'r6s',            segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: 'maxRank',   divStat: null },
-  'marvel-rivals':    { trnSlug: 'marvel-rivals',  segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: null,        divStat: null },
-  'apex-legends':     { trnSlug: 'apex',           segType: 'overview', segAttr: {},                        rankStat: 'rankScore',  peakStat: null,        divStat: null },
-  'rocket-league':    { trnSlug: 'rocket-league',  segType: 'playlist', segAttr: { playlist: 'ranked-standard' }, rankStat: 'tier', peakStat: null,        divStat: 'division' },
-  'lol':              { trnSlug: 'lol',            segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: null,        divStat: null },
-  'cs2':              { trnSlug: 'csgo',           segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: null,        divStat: null },
-  'halo-infinite':    { trnSlug: 'halo-infinite',  segType: 'playlist', segAttr: null,                      rankStat: 'csr',        peakStat: null,        divStat: null },
-  'overwatch-2':      { trnSlug: 'overwatch-2',    segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: null,        divStat: null },
-  'cod-bo6':          { trnSlug: 'cod',            segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: null,        divStat: null },
-  'pubg':             { trnSlug: 'pubg',           segType: 'overview', segAttr: {},                        rankStat: 'rankPoints', peakStat: null,        divStat: null },
-  'destiny-2':        { trnSlug: 'destiny-2',      segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: null,        divStat: null },
-  'smite-2':          { trnSlug: 'smite-2',        segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: null,        divStat: null },
-  'splitgate-2':      { trnSlug: 'splitgate-2',    segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: null,        divStat: null },
-  'battlefield-2042': { trnSlug: 'bf2042',         segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: null,        divStat: null },
-  'roblox':           { trnSlug: 'roblox',         segType: 'overview', segAttr: {},                        rankStat: 'rank',       peakStat: null,        divStat: null },
-};
+// ─── TRACKER.GG GAME LIST ─────────────────────────────────────────────────────
+// These games use manual rank entry. Users may optionally provide a tracker.gg
+// profile URL which is stored as a display link only (no auto-detection).
+const TRACKER_GG_GAMES = new Set([
+  'fortnite', 'valorant', 'r6s', 'marvel-rivals', 'apex-legends',
+  'rocket-league', 'lol', 'cs2', 'halo-infinite', 'overwatch-2',
+  'cod-bo6', 'pubg', 'destiny-2', 'smite-2', 'splitgate-2',
+  'battlefield-2042', 'roblox',
+]);
 
 // ─── LEGACY API CONFIGURATION (non-tracker.gg games) ─────────────────────────
 const GAME_API_CONFIG = {
@@ -92,30 +75,6 @@ function fetchJson(url, headers = {}) {
 }
 
 // ─── RANK MAPPING HELPERS ─────────────────────────────────────────────────────
-
-// Normalize rank name for comparison: lowercase, roman numerals → numbers, strip "Division"
-function normalizeRankName(name) {
-  if (!name) return '';
-  return name.toLowerCase()
-    .replace(/\bdivision\s*/gi, '')
-    .replace(/\bvii\b/g, '7').replace(/\bvi\b/g, '6').replace(/\biv\b/g, '4')
-    .replace(/\biii\b/g, '3').replace(/\bii\b/g, '2')
-    .replace(/\bv\b/g, '5').replace(/\bi\b/g, '1')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-// Find the best-matching rank index by name
-function findRankIndex(ranks, rankName) {
-  if (!rankName || !ranks.length) return 0;
-  const norm = normalizeRankName(rankName);
-  // Exact match
-  let idx = ranks.findIndex(r => normalizeRankName(r.name) === norm);
-  if (idx >= 0) return idx;
-  // Starts-with match
-  idx = ranks.findIndex(r => norm.startsWith(normalizeRankName(r.name)) || normalizeRankName(r.name).startsWith(norm));
-  return idx >= 0 ? idx : 0;
-}
 
 // Riot region → routing cluster for account-v1
 function riotCluster(region) {
@@ -226,104 +185,6 @@ function clashRoyaleIndex(trophies) {
   return 19;
 }
 
-// ─── TRACKER.GG LOOKUP ────────────────────────────────────────────────────────
-async function lookupTrackerGG(slug, trnUrl) {
-  const cfg = TRACKER_GG_GAMES[slug];
-  if (!cfg) throw new Error('This game is not configured for tracker.gg lookup');
-
-  // Parse tracker.gg URL: https://tracker.gg/{game}/profile/{platform}/{username}/...
-  // e.g. https://tracker.gg/valorant/profile/riot/ungun%230000/overview?playlist=competitive
-  const match = trnUrl.match(/tracker\.gg\/([^/]+)\/profile\/([^/]+)\/([^/?#]+)/);
-  if (!match) {
-    throw new Error('Invalid tracker.gg URL. Expected: https://tracker.gg/{game}/profile/{platform}/{username}');
-  }
-
-  const trnGame = match[1];  // game slug from the URL (e.g. "valorant", "apex")
-  const platform = match[2];
-  const username = decodeURIComponent(match[3]);
-
-  // Call api.tracker.gg — no key required
-  const apiUrl = `https://api.tracker.gg/api/v2/${trnGame}/standard/profile/${platform}/${encodeURIComponent(username)}`;
-  const res = await fetchJson(apiUrl, {
-    'Accept': 'application/json',
-    'Accept-Language': 'en-US,en;q=0.9',
-  });
-
-  if (res.status === 404) throw new Error('Profile not found on tracker.gg');
-  if (res.status === 429) throw new Error('Rate limited by tracker.gg — please try again in a moment');
-  if (res.status === 403 || res.status === 401) throw new Error('tracker.gg denied the request — try again shortly');
-  if (res.status !== 200) throw new Error(`Tracker.gg API error (${res.status})`);
-
-  const data = res.body?.data;
-  if (!data) throw new Error('No data returned from tracker.gg');
-
-  const displayName = data.platformInfo?.platformUserHandle || username;
-  const segments = data.segments || [];
-
-  // Find the right segment
-  let segment = null;
-  if (cfg.segType === 'overview') {
-    segment = segments.find(s => s.type === 'overview');
-  } else if (cfg.segType === 'playlist') {
-    if (cfg.segAttr && Object.keys(cfg.segAttr).length > 0) {
-      segment = segments.find(s =>
-        s.type === 'playlist' &&
-        Object.entries(cfg.segAttr).every(([k, v]) => s.attributes?.[k] === v)
-      );
-    }
-    // Fall back to first playlist, then first overview
-    if (!segment) segment = segments.find(s => s.type === 'playlist');
-    if (!segment) segment = segments.find(s => s.type === 'overview');
-  }
-
-  // Fall back to very first segment
-  if (!segment) segment = segments[0];
-
-  const stats = segment?.stats || {};
-
-  // Extract rank display name
-  let currentRankName = null;
-  let peakRankName = null;
-
-  const rankStat = stats[cfg.rankStat];
-  if (rankStat) {
-    if (cfg.divStat && stats[cfg.divStat]) {
-      // Rocket League: combine tier name + division (e.g., "Diamond" + "Division I" → "Diamond I")
-      const tierName = rankStat.metadata?.tierName || rankStat.displayValue || '';
-      const divRaw = stats[cfg.divStat].displayValue || '';
-      const divShort = divRaw.replace(/^Division\s*/i, '').trim();
-      currentRankName = divShort ? `${tierName} ${divShort}` : tierName;
-    } else if (rankStat.metadata?.rankName && rankStat.metadata?.divisionName) {
-      // e.g., Apex: rankName="Gold", divisionName="IV"
-      currentRankName = `${rankStat.metadata.rankName} ${rankStat.metadata.divisionName}`;
-    } else if (rankStat.displayValue) {
-      currentRankName = rankStat.displayValue;
-    } else if (rankStat.metadata?.tierName) {
-      currentRankName = rankStat.metadata.tierName;
-    }
-  }
-
-  // Try fallback stat keys if primary didn't work
-  if (!currentRankName) {
-    for (const key of ['rank', 'rankScore', 'tier', 'rating', 'grade', 'level']) {
-      const s = stats[key];
-      if (s?.displayValue && s.displayValue !== 'N/A' && s.displayValue !== '--') {
-        currentRankName = s.displayValue;
-        break;
-      }
-    }
-  }
-
-  // Peak rank
-  if (cfg.peakStat && stats[cfg.peakStat]) {
-    const peakStat = stats[cfg.peakStat];
-    if (peakStat.displayValue) peakRankName = peakStat.displayValue;
-    else if (peakStat.metadata?.rankName) peakRankName = peakStat.metadata.rankName;
-  }
-
-  return { username: displayName, currentRankName, peakRankName, platform };
-}
-
 // ─── LEGACY LOOKUP FUNCTION ───────────────────────────────────────────────────
 async function lookupRank(slug, identifier, region) {
   const cfg = GAME_API_CONFIG[slug];
@@ -427,14 +288,15 @@ async function lookupRank(slug, identifier, region) {
 router.get('/support', (req, res) => {
   const support = {};
 
-  // Tracker.gg games (no API key required)
-  for (const [slug] of Object.entries(TRACKER_GG_GAMES)) {
+  // Tracker.gg games — manual rank entry with optional profile link
+  for (const slug of TRACKER_GG_GAMES) {
     support[slug] = {
-      method: 'trackergg',
+      method: 'manual',
       available: true,
-      label: 'Tracker.gg Profile URL',
-      placeholder: 'https://tracker.gg/...',
-      help: 'Paste your tracker.gg profile URL. Your current and peak ranks will be auto-detected.',
+      trackerUrlOptional: true,
+      trackerUrlLabel: 'Tracker.gg Profile URL (optional)',
+      trackerUrlPlaceholder: 'https://tracker.gg/...',
+      trackerUrlHelp: 'Optionally link your tracker.gg profile for others to view your stats.',
     };
   }
 
@@ -459,33 +321,35 @@ router.get('/support', (req, res) => {
 
 // POST /api/verify/lookup — look up rank WITHOUT saving (preview step)
 router.post('/lookup', authenticate, async (req, res) => {
-  const { slug, identifier, region } = req.body;
-  if (!slug || !identifier) return res.status(400).json({ error: 'slug and identifier are required' });
+  const { slug, identifier, region, current_rank_index, peak_rank_index, tracker_url } = req.body;
+  if (!slug) return res.status(400).json({ error: 'slug is required' });
 
   try {
-    // Tracker.gg games
-    if (TRACKER_GG_GAMES[slug]) {
+    // Tracker.gg games — manual rank entry
+    if (TRACKER_GG_GAMES.has(slug)) {
       const game = db.prepare('SELECT * FROM games WHERE slug = ?').get(slug);
       if (!game) return res.status(404).json({ error: 'Game not found' });
       const ranks = JSON.parse(game.ranks);
 
-      const result = await lookupTrackerGG(slug, identifier);
+      const curIdx = Math.max(0, Math.min(Number(current_rank_index) || 0, ranks.length - 1));
+      const peakIdx = Math.max(curIdx, Math.min(Number(peak_rank_index) || curIdx, ranks.length - 1));
 
-      const curIdx = Math.max(0, Math.min(findRankIndex(ranks, result.currentRankName), ranks.length - 1));
-      const peakIdx = Math.max(curIdx, Math.min(findRankIndex(ranks, result.peakRankName || result.currentRankName), ranks.length - 1));
+      // Validate optional tracker.gg URL if provided
+      if (tracker_url && !/^https:\/\/tracker\.gg\//i.test(tracker_url)) {
+        return res.status(400).json({ error: 'Tracker URL must be a tracker.gg link' });
+      }
 
       return res.json({
         success: true,
-        username: result.username,
         current_rank_index: curIdx,
         peak_rank_index: peakIdx,
         current_rank: ranks[curIdx],
         peak_rank: ranks[peakIdx],
-        platform: result.platform,
       });
     }
 
     // Legacy games
+    if (!identifier) return res.status(400).json({ error: 'identifier is required' });
     const result = await lookupRank(slug, identifier, region);
     res.json({ success: true, ...result });
   } catch (err) {
@@ -509,13 +373,8 @@ router.post('/refresh/:accountId', authenticate, async (req, res) => {
   try {
     let curIdx, peakIdx, newUsername;
 
-    if (TRACKER_GG_GAMES[account.slug]) {
-      if (!account.tracker_url) return res.status(400).json({ error: 'No tracker.gg URL saved for this account' });
-      const result = await lookupTrackerGG(account.slug, account.tracker_url);
-      curIdx = Math.max(0, Math.min(findRankIndex(ranks, result.currentRankName), ranks.length - 1));
-      const peakFromApi = findRankIndex(ranks, result.peakRankName || result.currentRankName);
-      peakIdx = Math.max(curIdx, Math.min(Math.max(peakFromApi, account.peak_rank_index), ranks.length - 1));
-      newUsername = result.username;
+    if (TRACKER_GG_GAMES.has(account.slug)) {
+      return res.status(400).json({ error: 'This game uses manual rank entry — update your rank directly on your profile' });
     } else {
       if (!GAME_API_CONFIG[account.slug]) return res.status(400).json({ error: 'This game does not support automatic rank lookup' });
       const result = await lookupRank(account.slug, account.platform_username, account.region || '');
