@@ -107,7 +107,8 @@ async function loadPage(page) {
 function updateNavUser() {
   if (!currentUser) return;
   document.getElementById('navUsername').textContent = currentUser.gamertag || currentUser.username;
-  document.getElementById('menuGamerscore').textContent = formatScore(currentUser.gamerscore);
+  const navElo = currentUser.best_elo;
+  document.getElementById('menuGamerscore').textContent = navElo ? `ELO ${formatScore(navElo)}` : `GS ${formatScore(currentUser.gamerscore)}`;
   setAvatar('navAvatar', currentUser.gamertag || currentUser.username, currentUser.avatar_color, currentUser.avatar_url);
 }
 
@@ -198,9 +199,21 @@ async function loadDashboard() {
   } catch { return; }
 
   document.getElementById('dashWelcome').textContent = `Welcome back, ${currentUser.gamertag || currentUser.username}!`;
-  document.getElementById('dashGamerscore').textContent = formatScore(currentUser.gamerscore);
-  document.getElementById('dashGamesConnected').textContent = `${currentUser.accounts.length} game${currentUser.accounts.length !== 1 ? 's' : ''} connected`;
-  document.getElementById('dashRankTitle').textContent = getTitleFromScore(currentUser.gamerscore);
+  // ELO (primary) — show best calibrated ELO or "Calibrating"
+  const bestElo = currentUser.best_elo;
+  document.getElementById('dashGamerscore').textContent = bestElo ? formatScore(bestElo) : '—';
+  const eloSubEl = document.getElementById('dashGamesConnected');
+  if (!bestElo) {
+    const totalMatches = (currentUser.elo_data || []).reduce((s, r) => s + r.matches_played, 0);
+    const needed = 5 - Math.min(totalMatches, 5);
+    eloSubEl.textContent = totalMatches === 0 ? 'Play 5 matches to earn your ELO' : `${needed} more match${needed !== 1 ? 'es' : ''} to calibrate`;
+  } else {
+    eloSubEl.textContent = `${currentUser.accounts.length} game${currentUser.accounts.length !== 1 ? 's' : ''} connected`;
+  }
+  document.getElementById('dashRankTitle').textContent = bestElo ? getEloTitle(bestElo) : '';
+  // Gamerscore (secondary label update)
+  const gsSecEl = document.getElementById('dashGamerscoreSecondary');
+  if (gsSecEl) gsSecEl.textContent = `GS: ${formatScore(currentUser.gamerscore)}`;
 
   renderClubSummary(currentUser.club);
   renderDashAccounts(currentUser.accounts);
@@ -214,6 +227,22 @@ function getTitleFromScore(score) {
   if (score >= 1000) return '◈ Silver';
   if (score > 0) return '◈ Bronze';
   return '';
+}
+
+function getEloTitle(elo) {
+  if (!elo) return '';
+  if (elo >= 2000) return '◈ Grandmaster';
+  if (elo >= 1800) return '◈ Master';
+  if (elo >= 1600) return '◈ Diamond';
+  if (elo >= 1400) return '◈ Platinum';
+  if (elo >= 1250) return '◈ Gold';
+  if (elo >= 1100) return '◈ Silver';
+  return '◈ Bronze';
+}
+
+function formatElo(elo, matchesPlayed) {
+  if (matchesPlayed < 5) return `<span style="color:var(--text-3);font-style:italic">Calibrating (${matchesPlayed}/5)</span>`;
+  return `<span class="mono" style="color:#fbbf24;font-weight:700">${formatScore(elo)}</span>`;
 }
 
 function renderClubSummary(club) {
@@ -434,11 +463,30 @@ async function renderMyClub(clubId) {
           </div>
         </div>
         <div class="my-club-stats">
-          <div class="club-stat"><div class="club-stat-val club-score-val mono">${formatScore(club.club_score)}</div><div class="club-stat-lbl">Club Score</div></div>
+          <div class="club-stat">
+            <div class="club-stat-val mono" style="color:#fbbf24">${club.best_elo ? formatScore(club.best_elo) : '—'}</div>
+            <div class="club-stat-lbl">Club ELO</div>
+          </div>
           <div class="club-stat"><div class="club-stat-val club-wins-val mono">${club.wins}</div><div class="club-stat-lbl">Wins</div></div>
           <div class="club-stat"><div class="club-stat-val text-red mono">${club.losses}</div><div class="club-stat-lbl">Losses</div></div>
           <div class="club-stat"><div class="club-stat-val mono">${club.member_count}/20</div><div class="club-stat-lbl">Members</div></div>
         </div>
+        ${club.elo_data && club.elo_data.length ? `
+        <div style="margin-top:0.75rem">
+          <div class="section-title" style="font-size:0.75rem;margin-bottom:0.35rem;color:var(--text-3)">ELO by Game</div>
+          <div class="game-avg-grid">
+            ${club.elo_data.map(row => {
+              const isCalibrated = row.matches_played >= 5;
+              return `<div class="game-avg-chip">
+                <span>${row.game_icon}</span>
+                <span>${row.game_name}</span>
+                ${isCalibrated
+                  ? `<span class="game-avg-chip-rank" style="color:#fbbf24">${formatScore(row.elo)}</span>`
+                  : `<span class="game-avg-chip-rank" style="color:var(--text-3);font-style:italic">${row.matches_played}/5</span>`}
+              </div>`;
+            }).join('')}
+          </div>
+        </div>` : ''}
 
         ${club.game_averages && club.game_averages.length ? `
         <div class="club-game-averages">
@@ -723,11 +771,12 @@ function renderPlayerLeaderboard(players) {
   const el = document.getElementById('playerLeaderboard');
   if (!players.length) { el.innerHTML = '<p class="text-muted">No players yet.</p>'; return; }
   el.innerHTML = `<table class="leaderboard-table">
-    <thead><tr><th>#</th><th>Player</th><th>Club</th><th>Gamerscore</th></tr></thead>
+    <thead><tr><th>#</th><th>Player</th><th>Club</th><th>ELO</th><th style="font-size:0.75rem;color:var(--text-3)">GS</th></tr></thead>
     <tbody>${players.map((p, i) => {
       const rankClass = i === 0 ? 'lb-rank-1' : i === 1 ? 'lb-rank-2' : i === 2 ? 'lb-rank-3' : '';
       const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
       const avatarEl = buildAvatarHtml(p, 'sm');
+      const eloDisplay = p.best_elo ? `<span class="lb-score mono" style="color:#fbbf24">${formatScore(p.best_elo)}</span>` : `<span style="color:var(--text-3);font-style:italic;font-size:0.8rem">Unranked</span>`;
       return `<tr>
         <td><span class="lb-rank ${rankClass}">${medal || i + 1}</span></td>
         <td><div class="lb-user">
@@ -735,7 +784,8 @@ function renderPlayerLeaderboard(players) {
           <span>${escapeHtml(p.gamertag || p.username)} ${p.id === currentUser?.id ? '<span style="font-size:0.72rem;color:var(--accent)">(you)</span>' : ''}</span>
         </div></td>
         <td>${p.club_name ? `<span style="font-size:0.82rem;color:var(--text-2)">[${p.club_tag}] ${escapeHtml(p.club_name)}</span>` : '<span class="text-muted">—</span>'}</td>
-        <td><span class="lb-score mono">${formatScore(p.gamerscore)}</span></td>
+        <td>${eloDisplay}</td>
+        <td><span class="mono" style="font-size:0.8rem;color:var(--text-3)">${formatScore(p.gamerscore)}</span></td>
       </tr>`;
     }).join('')}</tbody>
   </table>`;
@@ -751,11 +801,12 @@ async function loadFriendsLeaderboard() {
       return;
     }
     el.innerHTML = `<table class="leaderboard-table">
-      <thead><tr><th>#</th><th>Player</th><th>Club</th><th>Gamerscore</th></tr></thead>
+      <thead><tr><th>#</th><th>Player</th><th>Club</th><th>ELO</th><th style="font-size:0.75rem;color:var(--text-3)">GS</th></tr></thead>
       <tbody>${friends.map((p, i) => {
         const rankClass = i === 0 ? 'lb-rank-1' : i === 1 ? 'lb-rank-2' : i === 2 ? 'lb-rank-3' : '';
         const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
         const avatarEl = buildAvatarHtml(p, 'sm');
+        const eloDisplay = p.best_elo ? `<span class="lb-score mono" style="color:#fbbf24">${formatScore(p.best_elo)}</span>` : `<span style="color:var(--text-3);font-style:italic;font-size:0.8rem">Unranked</span>`;
         return `<tr>
           <td><span class="lb-rank ${rankClass}">${medal || i + 1}</span></td>
           <td><div class="lb-user">
@@ -764,7 +815,8 @@ async function loadFriendsLeaderboard() {
             ${p.title ? `<span class="player-title">${escapeHtml(p.title)}</span>` : ''}
           </div></td>
           <td>${p.club_name ? `<span style="font-size:0.82rem;color:var(--text-2)">[${p.club_tag}] ${escapeHtml(p.club_name)}</span>` : '<span class="text-muted">—</span>'}</td>
-          <td><span class="lb-score mono">${formatScore(p.gamerscore)}</span></td>
+          <td>${eloDisplay}</td>
+          <td><span class="mono" style="font-size:0.8rem;color:var(--text-3)">${formatScore(p.gamerscore)}</span></td>
         </tr>`;
       }).join('')}</tbody>
     </table>`;
@@ -777,16 +829,17 @@ function renderClubLeaderboard(clubs) {
   const el = document.getElementById('clubLeaderboard');
   if (!clubs.length) { el.innerHTML = '<p class="text-muted">No clubs yet.</p>'; return; }
   el.innerHTML = `<table class="leaderboard-table">
-    <thead><tr><th>#</th><th>Club</th><th>Members</th><th>W / L</th><th>Club Score</th></tr></thead>
+    <thead><tr><th>#</th><th>Club</th><th>Members</th><th>W / L</th><th>ELO</th></tr></thead>
     <tbody>${clubs.map((c, i) => {
       const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
       const rankClass = i === 0 ? 'lb-rank-1' : i === 1 ? 'lb-rank-2' : i === 2 ? 'lb-rank-3' : '';
+      const eloDisplay = c.best_elo ? `<span class="lb-club-score mono" style="color:#fbbf24">${formatScore(c.best_elo)}</span>` : `<span style="color:var(--text-3);font-style:italic;font-size:0.8rem">Unranked</span>`;
       return `<tr>
         <td><span class="lb-rank ${rankClass}">${medal || i + 1}</span></td>
         <td><div class="lb-user"><strong>[${c.tag}]</strong>&nbsp;${escapeHtml(c.name)}</div></td>
         <td class="mono">${c.member_count}/20</td>
         <td><span class="text-green mono">${c.wins}W</span> / <span class="text-red mono">${c.losses}L</span></td>
-        <td><span class="lb-club-score mono">${formatScore(c.club_score)}</span></td>
+        <td>${eloDisplay}</td>
       </tr>`;
     }).join('')}</tbody>
   </table>`;
@@ -816,9 +869,38 @@ function renderProfileCard(user) {
   document.getElementById('profileGamertag').textContent = user.gamertag || user.username;
   document.getElementById('profileUsername').textContent = `@${user.username}`;
   document.getElementById('profileBio').textContent = user.bio || '';
-  document.getElementById('profileGamerscore').textContent = formatScore(user.gamerscore);
+  const profileBestElo = user.best_elo;
+  const profileEloEl = document.getElementById('profileGamerscore');
+  profileEloEl.innerHTML = profileBestElo
+    ? `<span style="color:#fbbf24">${formatScore(profileBestElo)}</span> <span style="font-size:0.65em;color:var(--text-3);font-weight:400">ELO</span>`
+    : `<span style="font-size:0.75em;color:var(--text-3);font-style:italic">Unranked</span>`;
+  // Gamerscore sub-label
+  const gsSubEl = document.getElementById('profileGamerscoreSub');
+  if (gsSubEl) gsSubEl.textContent = `GS: ${formatScore(user.gamerscore)}`;
   document.getElementById('profileFriendCount').textContent = user.friend_count || 0;
   document.getElementById('profileGamesCount').textContent = user.accounts.length;
+
+  // Per-game ELO breakdown
+  const eloSectionEl = document.getElementById('profileEloSection');
+  if (eloSectionEl && user.elo_data && user.elo_data.length) {
+    eloSectionEl.style.display = '';
+    eloSectionEl.innerHTML = `
+      <div class="section-title" style="font-size:0.82rem;margin-bottom:0.5rem;margin-top:1.25rem">ELO by Game</div>
+      <div class="game-avg-grid">
+        ${user.elo_data.map(row => {
+          const isCalibrated = row.matches_played >= 5;
+          return `<div class="game-avg-chip">
+            <span>${row.game_icon}</span>
+            <span>${escapeHtml(row.game_name)}</span>
+            ${isCalibrated
+              ? `<span class="game-avg-chip-rank" style="color:#fbbf24">${formatScore(row.elo)}</span>`
+              : `<span class="game-avg-chip-rank" style="color:var(--text-3);font-style:italic">${row.matches_played}/5</span>`}
+          </div>`;
+        }).join('')}
+      </div>`;
+  } else if (eloSectionEl) {
+    eloSectionEl.style.display = 'none';
+  }
 
   setAvatar('profileAvatar', user.gamertag || user.username, user.avatar_color, user.avatar_url);
 
@@ -832,7 +914,7 @@ function renderProfileCard(user) {
     titleBadge.textContent = user.title;
     titleBadge.style.display = '';
   } else {
-    const autoTitle = getTitleFromScore(user.gamerscore);
+    const autoTitle = user.best_elo ? getEloTitle(user.best_elo) : getTitleFromScore(user.gamerscore);
     if (autoTitle) { titleBadge.textContent = autoTitle; titleBadge.style.display = ''; }
     else titleBadge.style.display = 'none';
   }
@@ -1820,7 +1902,10 @@ function renderTeamCard(t, isMine) {
     <div class="club-card-stats">
       <div class="club-stat"><div class="club-stat-val mono">${t.wins || 0}</div><div class="club-stat-lbl">Wins</div></div>
       <div class="club-stat"><div class="club-stat-val text-red mono">${t.losses || 0}</div><div class="club-stat-lbl">Losses</div></div>
-      <div class="club-stat"><div class="club-stat-val mono">${formatScore(t.team_score || 0)}</div><div class="club-stat-lbl">Score</div></div>
+      <div class="club-stat">
+        <div class="club-stat-val mono" style="${(t.elo_matches || 0) >= 5 ? 'color:#fbbf24' : ''}">${(t.elo_matches || 0) >= 5 ? formatScore(t.elo) : '—'}</div>
+        <div class="club-stat-lbl">ELO</div>
+      </div>
     </div>
     <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem">
       <button class="btn btn-ghost btn-sm" onclick="openTeamDetail(${t.id})">View</button>

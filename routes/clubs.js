@@ -1,5 +1,5 @@
 const express = require('express');
-const { db, getClubAverageGamerscore, getAvgGSForMembers, getClubGameAverages, createMatch } = require('../db');
+const { db, getClubAverageGamerscore, getAvgGSForMembers, getClubGameAverages, createMatch, getClubBestElo, ELO_PROVISIONAL_THRESHOLD } = require('../db');
 const { authenticate } = require('./middleware');
 
 const router = express.Router();
@@ -133,7 +133,15 @@ router.get('/:id', (req, res) => {
     ORDER BY cb.awarded_at DESC
   `).all(req.params.id);
 
-  res.json({ ...club, challenges, badges });
+  const clubEloRows = db.prepare(`
+    SELECT ce.*, g.name as game_name, g.icon as game_icon, g.color as game_color
+    FROM club_elo ce JOIN games g ON g.id = ce.game_id
+    WHERE ce.club_id = ?
+    ORDER BY ce.elo DESC
+  `).all(req.params.id);
+  const bestElo = getClubBestElo(req.params.id);
+
+  res.json({ ...club, challenges, badges, elo_data: clubEloRows, best_elo: bestElo });
 });
 
 // Update club settings
@@ -380,14 +388,15 @@ router.post('/challenges/:challengeId/respond', authenticate, (req, res) => {
 // Club leaderboard
 router.get('/leaderboard/clubs', (req, res) => {
   const clubs = db.prepare(`
-    SELECT c.*, u.username as owner_username, COUNT(cm.user_id) as member_count
+    SELECT c.*, u.username as owner_username, COUNT(cm.user_id) as member_count,
+           (SELECT MAX(ce.elo) FROM club_elo ce WHERE ce.club_id = c.id AND ce.matches_played >= ?) as best_elo
     FROM clubs c
     JOIN users u ON c.owner_id = u.id
     LEFT JOIN club_members cm ON c.id = cm.club_id
     GROUP BY c.id
-    ORDER BY c.club_score DESC
+    ORDER BY best_elo DESC NULLS LAST, c.club_score DESC
     LIMIT 50
-  `).all();
+  `).all(ELO_PROVISIONAL_THRESHOLD);
   res.json(clubs);
 });
 

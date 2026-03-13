@@ -1,5 +1,5 @@
 const express = require('express');
-const { db } = require('../db');
+const { db, updateEloForMatch } = require('../db');
 const { authenticate } = require('./middleware');
 
 const router = express.Router();
@@ -234,9 +234,17 @@ function _resolveMatch(match, aWins, bWins) {
   `).run(aWins, bWins, winnerId, scoreAwarded, match.id);
 
   if (winnerId) {
-    db.prepare('UPDATE clubs SET club_score = club_score + ?, wins = wins + 1 WHERE id = ?').run(scoreAwarded, winnerId);
-    if (loserId) db.prepare('UPDATE clubs SET losses = losses + 1 WHERE id = ?').run(loserId);
+    if (match.match_type === 'club') {
+      db.prepare('UPDATE clubs SET club_score = club_score + ?, wins = wins + 1 WHERE id = ?').run(scoreAwarded, winnerId);
+      if (loserId) db.prepare('UPDATE clubs SET losses = losses + 1 WHERE id = ?').run(loserId);
+    } else if (match.match_type === 'team') {
+      db.prepare('UPDATE teams SET wins = wins + 1 WHERE id = ?').run(winnerId);
+      if (loserId) db.prepare('UPDATE teams SET losses = losses + 1 WHERE id = ?').run(loserId);
+    }
   }
+
+  // Update ELO for all participants and entities
+  updateEloForMatch(match, winnerId);
 
   // Close any linked club challenge
   const clubChallenge = db.prepare('SELECT * FROM club_challenges WHERE match_id = ?').get(match.id);

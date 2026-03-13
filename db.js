@@ -207,6 +207,31 @@ db.exec(`
   );
 `);
 
+// ===== ELO TABLES =====
+db.exec(`
+  CREATE TABLE IF NOT EXISTS user_elo (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    game_id INTEGER NOT NULL,
+    elo INTEGER DEFAULT 1200,
+    matches_played INTEGER DEFAULT 0,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
+    UNIQUE(user_id, game_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS club_elo (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    club_id INTEGER NOT NULL,
+    game_id INTEGER NOT NULL,
+    elo INTEGER DEFAULT 1200,
+    matches_played INTEGER DEFAULT 0,
+    FOREIGN KEY (club_id) REFERENCES clubs(id) ON DELETE CASCADE,
+    FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
+    UNIQUE(club_id, game_id)
+  );
+`);
+
 // ===== MIGRATIONS =====
 const userCols = db.pragma('table_info(users)').map(c => c.name);
 if (!userCols.includes('bio')) db.exec("ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ''");
@@ -235,6 +260,10 @@ if (!challengeCols.includes('match_id')) db.exec('ALTER TABLE club_challenges AD
 
 const openChallengeCols = db.pragma('table_info(open_challenges)').map(c => c.name);
 if (!openChallengeCols.includes('match_id')) db.exec('ALTER TABLE open_challenges ADD COLUMN match_id INTEGER');
+
+const teamCols = db.pragma('table_info(teams)').map(c => c.name);
+if (!teamCols.includes('elo')) db.exec('ALTER TABLE teams ADD COLUMN elo INTEGER DEFAULT 1200');
+if (!teamCols.includes('elo_matches')) db.exec('ALTER TABLE teams ADD COLUMN elo_matches INTEGER DEFAULT 0');
 
 // ===== TOURNAMENTS =====
 db.exec(`
@@ -836,6 +865,141 @@ function getClubGameAverages(clubId) {
   }).sort((a, b) => b.player_count - a.player_count);
 }
 
+// ===== ELO FUNCTIONS =====
+const ELO_DEFAULT = 1200;
+const ELO_MIN = 100;
+const ELO_PROVISIONAL_THRESHOLD = 5;
+
+function _eloK(matchesPlayed) {
+  if (matchesPlayed < 10) return 40;
+  if (matchesPlayed < 30) return 32;
+  return 24;
+}
+
+function _eloExpected(myElo, opponentElo) {
+  return 1 / (1 + Math.pow(10, (opponentElo - myElo) / 400));
+}
+
+function _eloChange(myElo, opponentElo, won, matchesPlayed) {
+  const k = _eloK(matchesPlayed);
+  const expected = _eloExpected(myElo, opponentElo);
+  return Math.round(k * ((won ? 1 : 0) - expected));
+}
+
+/** Get or create user_elo row; returns { elo, matches_played } */
+function getOrCreateUserElo(userId, gameId) {
+  let row = db.prepare('SELECT * FROM user_elo WHERE user_id = ? AND game_id = ?').get(userId, gameId);
+  if (!row) {
+    db.prepare('INSERT OR IGNORE INTO user_elo (user_id, game_id, elo, matches_played) VALUES (?, ?, ?, 0)').run(userId, gameId, ELO_DEFAULT);
+    row = db.prepare('SELECT * FROM user_elo WHERE user_id = ? AND game_id = ?').get(userId, gameId);
+  }
+  return row;
+}
+
+/** Get or create club_elo row */
+function getOrCreateClubElo(clubId, gameId) {
+  let row = db.prepare('SELECT * FROM club_elo WHERE club_id = ? AND game_id = ?').get(clubId, gameId);
+  if (!row) {
+    db.prepare('INSERT OR IGNORE INTO club_elo (club_id, game_id, elo, matches_played) VALUES (?, ?, ?, 0)').run(clubId, gameId, ELO_DEFAULT);
+    row = db.prepare('SELECT * FROM club_elo WHERE club_id = ? AND game_id = ?').get(clubId, gameId);
+  }
+  return row;
+}
+
+/**
+ * Apply ELO update after a completed match.
+ * match: full match row from DB
+ * winnerId: entity_a_id or entity_b_id
+ */
+function updateEloForMatch(match, winnerId) {
+  let gameIds = [];
+  try { gameIds = JSON.parse(match.game_ids); } catch {}
+  let pA = [], pB = [];
+  try { pA = JSON.parse(match.participant_a_ids); } catch {}
+  try { pB = JSON.parse(match.participant_b_ids); } catch {}
+  const aWon = winnerId === match.entity_a_id;
+
+  for (const gameId of gameIds) {
+    // ── Personal ELO ──────────────────────────────────────────
+    // Average ELO of each side for this game
+    const sideAElos = pA.map(uid => getOrCreateUserElo(uid, gameId).elo);
+    const sideBElos = pB.map(uid => getOrCreateUserElo(uid, gameId).elo);
+    const avgA = sideAElos.length ? Math.round(sideAElos.reduce((s, e) => s + e, 0) / sideAElos.length) : ELO_DEFAULT;
+    const avgB = sideBElos.length ? Math.round(sideBElos.reduce((s, e) => s + e, 0) / sideBElos.length) : ELO_DEFAULT;
+
+    // Update each participant's ELO
+    for (const uid of pA) {
+      const row = getOrCreateUserElo(uid, gameId);
+      const delta = _eloChange(row.elo, avgB, aWon, row.matches_played);
+      db.prepare('UPDATE user_elo SET elo = MAX(?, elo + ?), matches_played = matches_played + 1 WHERE user_id = ? AND game_id = ?')
+        .run(ELO_MIN, delta, uid, gameId);
+    }
+    for (const uid of pB) {
+      const row = getOrCreateUserElo(uid, gameId);
+      const delta = _eloChange(row.elo, avgA, !aWon, row.matches_played);
+      db.prepare('UPDATE user_elo SET elo = MAX(?, elo + ?), matches_played = matches_played + 1 WHERE user_id = ? AND game_id = ?')
+        .run(ELO_MIN, delta, uid, gameId);
+    }
+
+    // ── Club ELO (club matches only) ──────────────────────────
+    if (match.match_type === 'club' && match.entity_a_id && match.entity_b_id) {
+      const rowA = getOrCreateClubElo(match.entity_a_id, gameId);
+      const rowB = getOrCreateClubElo(match.entity_b_id, gameId);
+      const deltaA = _eloChange(rowA.elo, rowB.elo, aWon, rowA.matches_played);
+      const deltaB = _eloChange(rowB.elo, rowA.elo, !aWon, rowB.matches_played);
+      db.prepare('UPDATE club_elo SET elo = MAX(?, elo + ?), matches_played = matches_played + 1 WHERE club_id = ? AND game_id = ?')
+        .run(ELO_MIN, deltaA, match.entity_a_id, gameId);
+      db.prepare('UPDATE club_elo SET elo = MAX(?, elo + ?), matches_played = matches_played + 1 WHERE club_id = ? AND game_id = ?')
+        .run(ELO_MIN, deltaB, match.entity_b_id, gameId);
+    }
+  }
+
+  // ── Team ELO (team matches only) ────────────────────────────
+  if (match.match_type === 'team' && match.entity_a_id && match.entity_b_id) {
+    const tA = db.prepare('SELECT elo, elo_matches FROM teams WHERE id = ?').get(match.entity_a_id);
+    const tB = db.prepare('SELECT elo, elo_matches FROM teams WHERE id = ?').get(match.entity_b_id);
+    if (tA && tB) {
+      const deltaA = _eloChange(tA.elo || ELO_DEFAULT, tB.elo || ELO_DEFAULT, aWon, tA.elo_matches || 0);
+      const deltaB = _eloChange(tB.elo || ELO_DEFAULT, tA.elo || ELO_DEFAULT, !aWon, tB.elo_matches || 0);
+      db.prepare('UPDATE teams SET elo = MAX(?, elo + ?), elo_matches = elo_matches + 1 WHERE id = ?')
+        .run(ELO_MIN, deltaA, match.entity_a_id);
+      db.prepare('UPDATE teams SET elo = MAX(?, elo + ?), elo_matches = elo_matches + 1 WHERE id = ?')
+        .run(ELO_MIN, deltaB, match.entity_b_id);
+    }
+  }
+}
+
+/** Get all ELO rows for a user, including game info. Returns only games where matches_played > 0 */
+function getUserEloData(userId) {
+  return db.prepare(`
+    SELECT ue.*, g.name as game_name, g.icon as game_icon, g.color as game_color
+    FROM user_elo ue
+    JOIN games g ON g.id = ue.game_id
+    WHERE ue.user_id = ?
+    ORDER BY ue.elo DESC
+  `).all(userId);
+}
+
+/** Best single-game ELO for a user (only counts if matches_played >= threshold) */
+function getUserBestElo(userId) {
+  const row = db.prepare(`
+    SELECT elo FROM user_elo
+    WHERE user_id = ? AND matches_played >= ?
+    ORDER BY elo DESC LIMIT 1
+  `).get(userId, ELO_PROVISIONAL_THRESHOLD);
+  return row ? row.elo : null;
+}
+
+/** Best club ELO across all games (only if matches_played >= threshold) */
+function getClubBestElo(clubId) {
+  const row = db.prepare(`
+    SELECT elo FROM club_elo
+    WHERE club_id = ? AND matches_played >= ?
+    ORDER BY elo DESC LIMIT 1
+  `).get(clubId, ELO_PROVISIONAL_THRESHOLD);
+  return row ? row.elo : null;
+}
+
 /** Create a match record, returns match id */
 function createMatch({ match_type, entity_a_id, entity_b_id, entity_a_label, entity_b_label, participant_a_ids, participant_b_ids, game_ids, description }) {
   const result = db.prepare(`
@@ -855,4 +1019,8 @@ function createMatch({ match_type, entity_a_id, entity_b_id, entity_a_label, ent
   return result.lastInsertRowid;
 }
 
-module.exports = { db, updateUserGamerscore, getClubAverageGamerscore, getAvgGSForMembers, getClubGameAverages, createMatch };
+module.exports = {
+  db, updateUserGamerscore, getClubAverageGamerscore, getAvgGSForMembers, getClubGameAverages, createMatch,
+  updateEloForMatch, getUserEloData, getUserBestElo, getClubBestElo,
+  ELO_DEFAULT, ELO_PROVISIONAL_THRESHOLD,
+};

@@ -174,9 +174,10 @@
         <div class="gs-card" id="gamerscoreCard">
           <div class="gs-card-bg"></div>
           <div class="gs-card-content">
-            <div class="gs-card-label">◈ Gamerscore</div>
-            <div class="gs-card-score mono" id="dashGamerscore">0</div>
-            <div class="gs-card-sub" id="dashGamesConnected">0 games connected</div>
+            <div class="gs-card-label">◈ ELO Rating</div>
+            <div class="gs-card-score mono" id="dashGamerscore">—</div>
+            <div class="gs-card-sub" id="dashGamesConnected">Play 5 matches to earn your ELO</div>
+            <div class="gs-card-sub" id="dashGamerscoreSecondary" style="font-size:0.72rem;color:var(--text-3);margin-top:0.1rem"></div>
           </div>
           <div class="gs-card-rank" id="dashRankTitle"></div>
         </div>
@@ -374,8 +375,8 @@
             <p class="profile-bio" id="profileBio"></p>
             <div class="profile-stats-row">
               <div class="profile-stat">
-                <span class="profile-stat-val mono" id="profileGamerscore">0</span>
-                <span class="profile-stat-label">Gamerscore</span>
+                <span class="profile-stat-val mono" id="profileGamerscore">—</span>
+                <span class="profile-stat-label">ELO <span id="profileGamerscoreSub" style="font-size:0.7em;color:var(--text-3)"></span></span>
               </div>
               <div class="profile-stat">
                 <span class="profile-stat-val" id="profileFriendCount">0</span>
@@ -431,8 +432,11 @@
         </div>
       </div>
 
+      <!-- ELO by game -->
+      <div id="profileEloSection" style="margin-top:1.5rem;display:none"></div>
+
       <!-- Games ranked best to worst -->
-      <div style="margin-top:2rem">
+      <div style="margin-top:1.5rem">
         <h2 class="section-title" style="margin-bottom:1rem">Game Ranks</h2>
         <div id="profileGamesList" class="profile-games-list"></div>
       </div>
