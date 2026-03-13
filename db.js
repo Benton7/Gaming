@@ -236,6 +236,65 @@ if (!challengeCols.includes('match_id')) db.exec('ALTER TABLE club_challenges AD
 const openChallengeCols = db.pragma('table_info(open_challenges)').map(c => c.name);
 if (!openChallengeCols.includes('match_id')) db.exec('ALTER TABLE open_challenges ADD COLUMN match_id INTEGER');
 
+// ===== TOURNAMENTS =====
+db.exec(`
+  CREATE TABLE IF NOT EXISTS club_tournaments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    club_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    game_id INTEGER NOT NULL,
+    games_per_round INTEGER DEFAULT 1,
+    seeding TEXT DEFAULT 'random',
+    status TEXT DEFAULT 'pending',
+    winner_id INTEGER,
+    created_by INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (club_id) REFERENCES clubs(id) ON DELETE CASCADE,
+    FOREIGN KEY (game_id) REFERENCES games(id),
+    FOREIGN KEY (winner_id) REFERENCES users(id),
+    FOREIGN KEY (created_by) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS club_tournament_participants (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tournament_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    seed INTEGER,
+    FOREIGN KEY (tournament_id) REFERENCES club_tournaments(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE(tournament_id, user_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS club_tournament_matches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tournament_id INTEGER NOT NULL,
+    round INTEGER NOT NULL,
+    match_index INTEGER NOT NULL,
+    player_a_id INTEGER,
+    player_b_id INTEGER,
+    winner_id INTEGER,
+    status TEXT DEFAULT 'pending',
+    FOREIGN KEY (tournament_id) REFERENCES club_tournaments(id) ON DELETE CASCADE,
+    FOREIGN KEY (player_a_id) REFERENCES users(id),
+    FOREIGN KEY (player_b_id) REFERENCES users(id),
+    FOREIGN KEY (winner_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS club_badges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    club_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    game_id INTEGER NOT NULL,
+    badge_type TEXT DEFAULT 'tournament_champion',
+    tournament_id INTEGER,
+    awarded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (club_id) REFERENCES clubs(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (game_id) REFERENCES games(id),
+    UNIQUE(club_id, game_id, badge_type)
+  );
+`);
+
 // ===== SEED GAMES =====
 const allGames = [
   {

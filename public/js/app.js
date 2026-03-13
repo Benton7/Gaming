@@ -471,8 +471,29 @@ async function renderMyClub(clubId) {
             `).join('')}
           </div>
         </div>
+
+        ${club.badges && club.badges.length ? `
+        <div style="margin-top:1.25rem">
+          <div class="section-title" style="font-size:0.82rem;margin-bottom:0.5rem">🏆 Tournament Champions</div>
+          <div style="display:flex;flex-wrap:wrap;gap:0.5rem">
+            ${club.badges.map(b => `
+              <div class="tournament-champion-badge" style="--badge-color:${b.game_color || '#f59e0b'}">
+                <span class="badge-game-icon">${b.game_icon}</span>
+                <div class="badge-info">
+                  <div class="badge-player">${escapeHtml(b.gamertag || b.username)}</div>
+                  <div class="badge-game">${escapeHtml(b.game_name)} Champion</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>` : ''}
       </div>`;
 
+    // Show/hide tournament create button for owner
+    const createBtn = document.getElementById('createTournamentBtn');
+    if (createBtn) createBtn.style.display = isOwner ? '' : 'none';
+
+    await loadClubTournaments(clubId);
     await loadActiveMatches('myClubMatches', 'myClubMatchesSection', 'club');
 
     const challengesEl = document.getElementById('myClubChallenges');
@@ -2306,6 +2327,283 @@ async function sendMatchChat(matchId) {
       c.insertAdjacentHTML('beforeend', renderChatMessages([msg]));
       scrollChatToBottom();
     }
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+// ===== TOURNAMENTS =====
+
+let _currentTournamentId = null;
+
+async function loadClubTournaments(clubId) {
+  const el = document.getElementById('clubTournamentsList');
+  if (!el) return;
+  try {
+    const tournaments = await api.tournaments.forClub(clubId);
+    if (!tournaments.length) {
+      el.innerHTML = '<p class="text-muted" style="font-size:0.875rem">No tournaments yet.</p>';
+      return;
+    }
+    el.innerHTML = tournaments.map(t => {
+      const statusColor = { active: '#10b981', completed: '#f59e0b', pending: '#6366f1' }[t.status] || '#888';
+      const statusLabel = { active: 'In Progress', completed: 'Completed', pending: 'Pending' }[t.status] || t.status;
+      const winnerText = t.status === 'completed' && t.winner_gamertag
+        ? `<div style="font-size:0.78rem;color:#fbbf24;margin-top:0.2rem">🏆 ${escapeHtml(t.winner_gamertag || t.winner_username)}</div>`
+        : '';
+      return `<div class="challenge-card" style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:700">${escapeHtml(t.name)}</div>
+          <div style="font-size:0.8rem;color:var(--text-2)">${t.game_icon} ${escapeHtml(t.game_name)} · Best of ${t.games_per_round}</div>
+          ${winnerText}
+        </div>
+        <div style="display:flex;align-items:center;gap:0.75rem">
+          <span style="padding:0.2rem 0.6rem;border-radius:9999px;font-size:0.75rem;font-weight:700;background:${statusColor}22;color:${statusColor};border:1px solid ${statusColor}55">${statusLabel}</span>
+          <button class="btn btn-ghost btn-sm" onclick="openTournamentBracket(${t.id})">View Bracket</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch {
+    el.innerHTML = '<p class="text-muted">Failed to load tournaments.</p>';
+  }
+}
+
+async function openCreateTournamentModal() {
+  if (!currentUser) return;
+  const club = await api.clubs.get(userClubId).catch(() => null);
+  if (!club) return;
+
+  // Populate game dropdown
+  const games = await api.games.list().catch(() => []);
+  const gameSelect = document.getElementById('tournamentGame');
+  gameSelect.innerHTML = games.map(g => `<option value="${g.id}">${g.icon} ${escapeHtml(g.name)}</option>`).join('');
+
+  // Populate member checkboxes
+  const cbContainer = document.getElementById('tournamentMemberCheckboxes');
+  cbContainer.innerHTML = club.members.map(m => `
+    <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;padding:0.2rem 0.1rem;cursor:pointer">
+      <input type="checkbox" class="tournament-member-cb" value="${m.id}" onchange="updateTournamentParticipantCount()">
+      <div class="avatar-sm" style="background:${m.avatar_color || '#6366f1'};width:20px;height:20px;font-size:0.65rem;flex-shrink:0">${(m.gamertag || m.username)[0].toUpperCase()}</div>
+      ${escapeHtml(m.gamertag || m.username)}
+    </label>
+  `).join('');
+
+  document.getElementById('tournamentName').value = '';
+  document.getElementById('tournamentParticipantCount').textContent = '';
+  document.getElementById('manualSeedOrder').style.display = 'none';
+  document.getElementById('createTournamentError').style.display = 'none';
+  document.getElementById('tournamentSeeding').onchange = updateManualSeedUI;
+
+  showModal('createTournamentModal');
+}
+
+function updateTournamentParticipantCount() {
+  const checked = document.querySelectorAll('.tournament-member-cb:checked').length;
+  document.getElementById('tournamentParticipantCount').textContent = `(${checked} selected)`;
+  if (document.getElementById('tournamentSeeding').value === 'manual') updateManualSeedList();
+}
+
+function updateManualSeedUI() {
+  const isManual = document.getElementById('tournamentSeeding').value === 'manual';
+  document.getElementById('manualSeedOrder').style.display = isManual ? '' : 'none';
+  if (isManual) updateManualSeedList();
+}
+
+function updateManualSeedList() {
+  const checked = [...document.querySelectorAll('.tournament-member-cb:checked')];
+  const list = document.getElementById('manualSeedList');
+  // Preserve existing order if items match
+  const existing = [...list.querySelectorAll('[data-uid]')].map(el => el.dataset.uid);
+  const checkedIds = checked.map(cb => cb.value);
+  // Add new items, keep existing order
+  const orderedIds = [...existing.filter(id => checkedIds.includes(id)), ...checkedIds.filter(id => !existing.includes(id))];
+  list.innerHTML = orderedIds.map((uid, i) => {
+    const cb = document.querySelector(`.tournament-member-cb[value="${uid}"]`);
+    const label = cb ? cb.closest('label').textContent.trim() : uid;
+    return `<div class="seed-row" data-uid="${uid}" draggable="true"
+      ondragstart="seedDragStart(event)" ondragover="seedDragOver(event)" ondrop="seedDrop(event)"
+      style="display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0.5rem;background:var(--bg-3);border-radius:var(--radius-sm);cursor:grab">
+      <span style="font-size:0.75rem;color:var(--text-3);width:18px;text-align:right">#${i + 1}</span>
+      <span style="font-size:0.82rem">${escapeHtml(label)}</span>
+    </div>`;
+  }).join('');
+}
+
+function seedDragStart(e) { e.dataTransfer.setData('text/plain', e.currentTarget.dataset.uid); }
+function seedDragOver(e) { e.preventDefault(); }
+function seedDrop(e) {
+  e.preventDefault();
+  const draggedUid = e.dataTransfer.getData('text/plain');
+  const target = e.currentTarget;
+  if (target.dataset.uid === draggedUid) return;
+  const list = document.getElementById('manualSeedList');
+  const draggedEl = list.querySelector(`[data-uid="${draggedUid}"]`);
+  list.insertBefore(draggedEl, target);
+  updateManualSeedList();
+}
+
+async function submitCreateTournament() {
+  const name = document.getElementById('tournamentName').value.trim();
+  const gameId = document.getElementById('tournamentGame').value;
+  const gpr = document.getElementById('tournamentGPR').value;
+  const seeding = document.getElementById('tournamentSeeding').value;
+  const errEl = document.getElementById('createTournamentError');
+
+  if (!name) { errEl.textContent = 'Please enter a tournament name.'; errEl.style.display = ''; return; }
+
+  let participantIds;
+  if (seeding === 'manual') {
+    participantIds = [...document.querySelectorAll('#manualSeedList [data-uid]')].map(el => Number(el.dataset.uid));
+  } else {
+    participantIds = [...document.querySelectorAll('.tournament-member-cb:checked')].map(cb => Number(cb.value));
+  }
+  if (participantIds.length < 2) { errEl.textContent = 'Select at least 2 participants.'; errEl.style.display = ''; return; }
+
+  errEl.style.display = 'none';
+  try {
+    await api.tournaments.create({ club_id: userClubId, name, game_id: gameId, games_per_round: gpr, seeding, participant_ids: participantIds });
+    showToast('Tournament created!', 'success');
+    closeAllModals();
+    await loadClubTournaments(userClubId);
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.style.display = '';
+  }
+}
+
+async function openTournamentBracket(id) {
+  _currentTournamentId = id;
+  try {
+    const t = await api.tournaments.get(id);
+    renderBracketModal(t);
+    showModal('tournamentBracketModal');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+function renderBracketModal(t) {
+  const isOwner = userClubId && t.created_by === currentUser.id || (currentUser && t.club && t.club.owner_id === currentUser.id);
+  const canManage = currentUser && t.created_by === currentUser.id;
+
+  document.getElementById('bracketModalTitle').textContent = `${t.game ? t.game.icon : '🏆'} ${escapeHtml(t.name)}`;
+
+  const cancelBtn = document.getElementById('cancelTournamentBtn');
+  if (cancelBtn) cancelBtn.style.display = canManage && t.status === 'active' ? '' : 'none';
+
+  // Winner banner
+  const banner = document.getElementById('bracketWinnerBanner');
+  const winnerName = document.getElementById('bracketWinnerName');
+  if (t.status === 'completed' && t.winner) {
+    banner.style.display = '';
+    winnerName.textContent = `🏆 ${t.winner.gamertag || t.winner.username}`;
+  } else {
+    banner.style.display = 'none';
+  }
+
+  // Group matches by round
+  const maxRound = Math.max(...t.matches.map(m => m.round), 1);
+  const rounds = [];
+  for (let r = 1; r <= maxRound; r++) {
+    rounds.push(t.matches.filter(m => m.round === r).sort((a, b) => a.match_index - b.match_index));
+  }
+
+  const roundLabels = getRoundLabels(maxRound);
+
+  const html = `<div class="bracket-wrapper">
+    ${rounds.map((rMatches, ri) => `
+      <div class="bracket-round">
+        <div class="bracket-round-label">${roundLabels[ri]}</div>
+        <div class="bracket-matches">
+          ${rMatches.map(m => renderBracketMatch(m, t, canManage)).join('')}
+        </div>
+      </div>
+    `).join('')}
+  </div>`;
+
+  document.getElementById('bracketContainer').innerHTML = html;
+}
+
+function getRoundLabels(maxRound) {
+  const labels = [];
+  for (let r = 1; r <= maxRound; r++) {
+    const fromEnd = maxRound - r;
+    if (fromEnd === 0) labels.push('Final');
+    else if (fromEnd === 1) labels.push('Semifinal');
+    else if (fromEnd === 2) labels.push('Quarterfinal');
+    else labels.push(`Round ${r}`);
+  }
+  return labels;
+}
+
+function renderBracketMatch(m, t, canManage) {
+  const playerName = (p) => p ? escapeHtml(p.gamertag || p.username) : '<span style="color:var(--text-3);font-style:italic">TBD</span>';
+  const isWinnerA = m.winner_id && m.player_a_id && m.winner_id === m.player_a_id;
+  const isWinnerB = m.winner_id && m.player_b_id && m.winner_id === m.player_b_id;
+  const isPending = m.status === 'pending' && m.player_a_id && m.player_b_id;
+  const isBye = m.status === 'bye';
+
+  const rowStyle = (isWinner) => isWinner ? 'background:var(--bg-3);font-weight:700;color:#fbbf24' : 'background:var(--bg-2)';
+
+  return `<div class="bracket-match ${isBye ? 'bracket-match-bye' : ''}">
+    <div class="bracket-player" style="${rowStyle(isWinnerA)}">
+      ${isWinnerA ? '🏆 ' : ''}${playerName(m.player_a)}
+    </div>
+    <div class="bracket-player" style="${rowStyle(isWinnerB)}">
+      ${isWinnerB ? '🏆 ' : ''}${playerName(m.player_b)}
+      ${isBye ? '<span style="font-size:0.68rem;color:var(--text-3);margin-left:0.25rem">(bye)</span>' : ''}
+    </div>
+    ${isPending && canManage && t.status === 'active' ? `
+    <div class="bracket-set-winner">
+      <button class="btn btn-ghost btn-sm" style="font-size:0.72rem;padding:0.2rem 0.5rem" onclick="promptSetWinner(${t.id}, ${m.id}, ${m.player_a_id}, '${escapeHtml(m.player_a ? (m.player_a.gamertag || m.player_a.username) : '')}', ${m.player_b_id}, '${escapeHtml(m.player_b ? (m.player_b.gamertag || m.player_b.username) : '')}')">Set Winner</button>
+    </div>` : ''}
+  </div>`;
+}
+
+function promptSetWinner(tId, matchId, pAId, pAName, pBId, pBName) {
+  // Simple inline prompt using a small overlay inside the bracket modal
+  const existing = document.getElementById('setWinnerPrompt');
+  if (existing) existing.remove();
+
+  const div = document.createElement('div');
+  div.id = 'setWinnerPrompt';
+  div.style.cssText = 'position:fixed;inset:0;background:#0009;display:flex;align-items:center;justify-content:center;z-index:9999';
+  div.innerHTML = `
+    <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;max-width:320px;width:90%;text-align:center">
+      <div style="font-weight:700;font-size:1rem;margin-bottom:1rem">Who won this match?</div>
+      <div style="display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="confirmSetWinner(${tId},${matchId},${pAId})">${escapeHtml(pAName)}</button>
+        <button class="btn btn-primary" onclick="confirmSetWinner(${tId},${matchId},${pBId})">${escapeHtml(pBName)}</button>
+      </div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:1rem" onclick="document.getElementById('setWinnerPrompt').remove()">Cancel</button>
+    </div>`;
+  document.body.appendChild(div);
+}
+
+async function confirmSetWinner(tId, matchId, winnerId) {
+  const prompt = document.getElementById('setWinnerPrompt');
+  if (prompt) prompt.remove();
+  try {
+    const t = await api.tournaments.setWinner(tId, matchId, { winner_id: winnerId });
+    renderBracketModal(t);
+    if (t.status === 'completed') {
+      showToast(`🏆 ${t.winner ? (t.winner.gamertag || t.winner.username) : 'Unknown'} wins the tournament!`, 'success');
+      await loadClubTournaments(userClubId);
+      await renderMyClub(userClubId);
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function cancelTournament() {
+  if (!_currentTournamentId) return;
+  if (!confirm('Cancel this tournament? This cannot be undone.')) return;
+  try {
+    await api.tournaments.cancel(_currentTournamentId);
+    showToast('Tournament cancelled.', 'success');
+    closeAllModals();
+    await loadClubTournaments(userClubId);
   } catch (err) {
     showToast(err.message, 'error');
   }

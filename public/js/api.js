@@ -86,4 +86,11 @@ const api = {
     sendMessage: (id, body) => req('POST', `/api/matches/${id}/messages`, body),
     getMessages: (id, since) => req('GET', `/api/matches/${id}/messages${since ? `?since=${encodeURIComponent(since)}` : ''}`),
   },
+  tournaments: {
+    forClub: (clubId) => req('GET', `/api/tournaments/club/${clubId}`),
+    get: (id) => req('GET', `/api/tournaments/${id}`),
+    create: (body) => req('POST', '/api/tournaments', body),
+    setWinner: (id, matchId, body) => req('POST', `/api/tournaments/${id}/matches/${matchId}/winner`, body),
+    cancel: (id) => req('DELETE', `/api/tournaments/${id}`),
+  },
 };

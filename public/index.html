@@ -247,6 +247,13 @@
           <h3 class="section-title" style="margin-bottom:0.75rem">Active Matches</h3>
           <div id="myClubMatches"></div>
         </div>
+        <div style="margin-top:1.5rem">
+          <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;margin-bottom:0.75rem">
+            <h3 class="section-title">Tournaments</h3>
+            <button class="btn btn-ghost btn-sm" id="createTournamentBtn" onclick="openCreateTournamentModal()" style="display:none">🏆 New Tournament</button>
+          </div>
+          <div id="clubTournamentsList"></div>
+        </div>
       </div>
 
       <!-- Open Challenges (public) -->
@@ -856,6 +863,70 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeAllModals()">Cancel</button>
       <button class="btn btn-success" onclick="submitVerifyAccount()" id="verifySubmitBtn">✓ Verify</button>
+    </div>
+  </div>
+
+  <!-- Create Tournament Modal -->
+  <div class="modal" id="createTournamentModal" style="max-width:520px">
+    <div class="modal-header">
+      <h3 class="modal-title">🏆 Create Tournament</h3>
+      <button class="modal-close" onclick="closeAllModals()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="createTournamentError" class="alert alert-error" style="display:none"></div>
+      <div class="form-group">
+        <label class="form-label">Tournament Name</label>
+        <input type="text" class="form-input" id="tournamentName" placeholder="e.g. Summer Showdown" maxlength="60" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Game</label>
+        <select class="form-input" id="tournamentGame"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Format</label>
+        <select class="form-input" id="tournamentGPR">
+          <option value="1">Best of 1</option>
+          <option value="3">Best of 3</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Seeding</label>
+        <select class="form-input" id="tournamentSeeding">
+          <option value="random">Randomized</option>
+          <option value="manual">Manual (order below)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Participants <span id="tournamentParticipantCount" style="font-size:0.78rem;color:var(--text-3)"></span></label>
+        <div id="tournamentMemberCheckboxes" style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;max-height:200px;overflow-y:auto;padding:0.5rem;background:var(--bg-2);border-radius:var(--radius-sm)"></div>
+        <p style="font-size:0.75rem;color:var(--text-3);margin-top:0.35rem">Minimum 2 players. For manual seeding, the order selected determines seed order.</p>
+      </div>
+      <div id="manualSeedOrder" style="display:none;margin-top:0.5rem">
+        <label class="form-label" style="font-size:0.8rem">Seed Order (drag to reorder)</label>
+        <div id="manualSeedList" style="display:flex;flex-direction:column;gap:0.3rem;max-height:180px;overflow-y:auto"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeAllModals()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitCreateTournament()">🏆 Create</button>
+    </div>
+  </div>
+
+  <!-- Tournament Bracket Modal -->
+  <div class="modal" id="tournamentBracketModal" style="max-width:860px;width:95vw">
+    <div class="modal-header">
+      <h3 class="modal-title" id="bracketModalTitle">Tournament Bracket</h3>
+      <div style="display:flex;gap:0.5rem;align-items:center">
+        <button class="btn btn-danger btn-sm" id="cancelTournamentBtn" onclick="cancelTournament()" style="display:none">Cancel Tournament</button>
+        <button class="modal-close" onclick="closeAllModals()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body" style="padding:1rem 0.75rem">
+      <div id="bracketWinnerBanner" style="display:none;text-align:center;margin-bottom:1rem;padding:1rem;background:linear-gradient(135deg,#f59e0b22,#fbbf2422);border:1px solid #f59e0b55;border-radius:var(--radius)">
+        <div style="font-size:1.5rem;font-weight:900;color:#fbbf24" id="bracketWinnerName"></div>
+        <div style="font-size:0.8rem;color:var(--text-2);margin-top:0.2rem">Tournament Champion</div>
+      </div>
+      <div id="bracketContainer" style="overflow-x:auto;padding-bottom:0.5rem"></div>
     </div>
   </div>
 

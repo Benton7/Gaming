@@ -123,7 +123,17 @@ router.get('/:id', (req, res) => {
     LIMIT 10
   `).all(req.params.id, req.params.id);
 
-  res.json({ ...club, challenges });
+  // Champion badges for this club
+  const badges = db.prepare(`
+    SELECT cb.*, u.username, u.gamertag, u.avatar_color, g.name as game_name, g.icon as game_icon, g.color as game_color
+    FROM club_badges cb
+    JOIN users u ON u.id = cb.user_id
+    JOIN games g ON g.id = cb.game_id
+    WHERE cb.club_id = ?
+    ORDER BY cb.awarded_at DESC
+  `).all(req.params.id);
+
+  res.json({ ...club, challenges, badges });
 });
 
 // Update club settings
